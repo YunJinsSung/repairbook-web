@@ -1,5 +1,6 @@
 (function () {
-  const S = window.Store, ART = window.RB_ART, SEED = window.RB_SEED;
+  const S = window.Store, ART = window.RB_ART, SEED = window.RB_SEED, PH = window.RB_PHOTO;
+  const photo = (p, w = 1200, eager) => `<img class="ph" src="https://images.unsplash.com/photo-${p[0]}?auto=format&fit=crop&w=${w}&q=75" alt="${p[1]}"${eager ? "" : ' loading="lazy"'} />`;
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -101,7 +102,7 @@
     return {
       html: `
       <section class="hero">
-        <div class="hero-art">${ART.hero}</div>
+        <div class="hero-art">${photo(PH.hero, 2000, true)}</div>
         <div class="hero-word">REPAIRBOOK</div>
         <div class="hero-foot">
           <p>새로 사기 전에, 하나 더 꽂아 보세요.</p>
@@ -118,15 +119,15 @@
             <ol class="numlist">${steps.map((s, i) => `<li><span class="n">0${i + 1}</span><div><div class="t">${s[0]}</div><div class="d">${s[1]}</div></div></li>`).join("")}</ol>
           </div>
         </div>
-        <div class="frame">${ART.box}</div>
+        <div class="frame">${photo(PH.box, 900)}</div>
       </div></section>
 
       <section class="sec sand"><div class="wrap">
         <div class="sec-head"><h2 class="h-lg">부품만 사는 것과<br/>무엇이 다른가요</h2><a class="tlink" href="#/kit">키트 자세히 보기</a></div>
         <div class="cols3">
-          <div class="card-quiet"><div class="ic">${ART.diag}</div><h3>증상에서 시작하는 진단</h3><p>부품 이름을 몰라도 돼요. 저장공간 부족처럼 키트로 확실히 해결되는 경우에만 판매하고, 전원·화면 고장은 수리점으로 연결해요.</p></div>
-          <div class="card-quiet"><div class="ic">${ART.guideArt}</div><h3>내 모델 그대로의 가이드</h3><p>실제로 분해해 만든 약 4분·7단계 영상과 사진. 나사 매트의 번호까지 영상 자막과 똑같아요.</p></div>
-          <div class="card-quiet"><div class="ic">${ART.support}</div><h3>끝까지 함께하는 지원</h3><p>막히면 지금 단계가 함께 전달되는 원격 지원. 15분 안에 해결되지 않으면 제휴 수리점을 연결해요.</p></div>
+          <div class="card-quiet"><div class="ic">${photo(PH.diag, 700)}</div><h3>증상에서 시작하는 진단</h3><p>부품 이름을 몰라도 돼요. 저장공간 부족처럼 키트로 확실히 해결되는 경우에만 판매하고, 전원·화면 고장은 수리점으로 연결해요.</p></div>
+          <div class="card-quiet"><div class="ic">${photo(PH.guideArt, 700)}</div><h3>내 모델 그대로의 가이드</h3><p>실제로 분해해 만든 약 4분·7단계 영상과 사진. 나사 매트의 번호까지 영상 자막과 똑같아요.</p></div>
+          <div class="card-quiet"><div class="ic">${photo(PH.support, 700)}</div><h3>끝까지 함께하는 지원</h3><p>막히면 지금 단계가 함께 전달되는 원격 지원. 15분 안에 해결되지 않으면 제휴 수리점을 연결해요.</p></div>
         </div>
       </div></section>
 
@@ -142,7 +143,7 @@
       </div></section>
 
       <section class="sec paper2"><div class="wrap two">
-        <div class="frame wide" style="background:var(--sand)">${ART.ssd}</div>
+        <div class="frame wide">${photo(PH.ssd, 1200)}</div>
         <div>
           <div class="eyebrow">오진 안심 보장</div>
           <h2 class="h-md" style="margin:12px 0 20px">진단이 틀렸다면, 저희가 책임져요</h2>
@@ -533,9 +534,9 @@
       const i = prog.step, s = steps[i];
       const pct = Math.round(((i + (prog.complete ? 1 : 0)) / steps.length) * 100);
       $("#gMain").innerHTML = prog.complete
-        ? `<div class="dcard" style="text-align:center"><div class="eyebrow">완료</div><div class="verdict">저장공간이 늘었어요</div><p class="muted">새 드라이브가 생겼다면 성공이에요. 이제 사진과 영상을 새 공간에 옮겨 보세요.</p><div class="frame wide" style="max-width:420px;margin:24px auto">${ART.step.check}</div><button class="btn" data-reopen>가이드 다시 보기</button></div>`
+        ? `<div class="dcard" style="text-align:center"><div class="eyebrow">완료</div><div class="verdict">저장공간이 늘었어요</div><p class="muted">새 드라이브가 생겼다면 성공이에요. 이제 사진과 영상을 새 공간에 옮겨 보세요.</p><div class="frame wide" style="max-width:420px;margin:24px auto">${photo(PH.step.check, 900)}</div><button class="btn" data-reopen>가이드 다시 보기</button></div>`
         : `<div class="progress-txt">${i + 1} / ${steps.length} · ${esc(s.t)}</div><div class="bar"><i style="width:${pct}%"></i></div>
-          <div class="media"><span class="tag">영상 ${i + 1}장 · 약 ${s.min}분 · ${esc(m.name)}</span>${ART.step[s.art]}</div>
+          <div class="media"><span class="tag">영상 ${i + 1}장 · 약 ${s.min}분 · ${esc(m.name)}</span>${photo(PH.step[s.art], 1400)}</div>
           <p class="lead" style="font-size:19px">${esc(s.body)}</p>
           <div class="eyebrow" style="margin:26px 0 4px">확인하고 넘어가요</div>
           <ul class="tasks">${s.tasks.map((t, k) => `<li><label class="check"><input type="checkbox" data-task="${k}" ${(prog.done[i] || [])[k] ? "checked" : ""}/><span>${esc(t)}</span></label></li>`).join("")}</ul>
@@ -625,7 +626,7 @@
       title: "키트",
       keepScroll: false,
       html: `<div class="wrap page-head"><div class="eyebrow">모델 전용 저장공간 추가 키트</div><h1>받자마자 시작할 수 있게</h1><p class="muted" style="margin-top:14px;max-width:640px">작은 크라프트 상자 하나에 필요한 것을 모두 담았어요. 모든 인쇄물에는 주문한 모델 코드와 주문번호가 찍혀 나가요.</p></div>
-      <section class="sec tight"><div class="wrap"><div class="frame wide" style="max-height:440px;margin-bottom:60px">${ART.box}</div>
+      <section class="sec tight"><div class="wrap"><div class="frame wide" style="max-height:440px;margin-bottom:60px">${photo(PH.kitBox, 1600)}</div>
         <ol class="numlist kitlist">${SEED.kit.map((k) => `<li><span class="n">${k.n}</span><div><div class="t">${esc(k.t)}</div><div class="d">${esc(k.d)}</div></div></li>`).join("")}</ol></div></section>
       <section class="sec sand"><div class="wrap">
         <div class="sec-head"><h2 class="h-lg">가격은 이렇게 정해요</h2><span class="small muted">부품 시세 ${esc(p.date)} 기준 · 결제 시점에 확정</span></div>
