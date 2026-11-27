@@ -42,7 +42,7 @@
   }
   const routes = {
     "": Home, diagnose: Diagnose, diagnosis: DiagnosisCard, models: Models, model: ModelDetail,
-    order: Order, buy: Buy, done: Done, guide: Guide, orders: Orders, admin: Admin, kit: Kit, upgrade: Upgrade
+    order: Order, buy: Buy, repair: Repair, done: Done, guide: Guide, orders: Orders, admin: Admin, kit: Kit, upgrade: Upgrade
   };
   function render() {
     const r = parse();
@@ -479,6 +479,161 @@
     });
   }
 
+  // ---------- Repair shop brokerage ----------
+  const SHOPS = window.RB_SHOPS || [], REGIONS = window.RB_REGIONS || [];
+  const methodKo = { visit: "방문 수리", parcel: "택배 수리" };
+  function Repair(r) {
+    if (r.parts[1]) return RepairStatus(r.parts[1]);
+    const mine = S.s.diagnoses.slice().sort((a, b) => (b.result.grade === "C") - (a.result.grade === "C"));
+    const pre = r.q.get("diag") && S.diagnosis(r.q.get("diag"));
+    const RQ = { diag: pre ? pre.id : (mine.find((d) => d.result.grade === "C") || {}).id || "", symptom: pre ? pre.symptom : "", modelId: pre ? pre.modelId : "", region: "", method: "visit", shop: "" };
+    const perks = [
+      ["점검비 면제·할인", "진단 카드를 보여 주면 같은 점검을 다시 받지 않아요."],
+      ["진단 내용 그대로 전달", "증상·답변·사진이 수리점에 먼저 전달돼요. 처음부터 설명할 필요가 없어요."],
+      ["공임 10% 할인", "리페어북을 통해 맡기면 제휴 수리점 공임을 할인해 드려요."],
+      ["진행 상황 한곳에서", "접수부터 견적·완료까지 내 주문에서 확인해요."]
+    ];
+    const steps = [["요청 접수", "진단 카드와 지역을 골라 요청해요"], ["수리점 확인", "영업일 하루 안에 수리점이 연락드려요"], ["방문·입고", "예약한 날 방문하거나 택배로 보내요"], ["점검·견적", "수리 전 견적을 먼저 알려 드리고 동의를 받아요"], ["수리 완료", "수리 내역이 진단 카드에 함께 남아요"]];
+    return {
+      title: "수리점 연결",
+      html: `<div class="wrap page-head"><div class="eyebrow">제휴 수리점 연결</div><h1>진단 카드 그대로,<br/>믿을 수 있는 수리점으로</h1>
+        <p class="muted" style="margin-top:14px;max-width:640px">키트로 해결할 수 없는 고장은 제휴 수리점에 연결해 드려요. 리페어북이 먼저 진단한 내용을 넘겨서, 같은 점검을 두 번 받지 않게 해요.</p></div>
+      <section class="sec tight"><div class="wrap"><div class="perks">${perks.map((x, i) => `<div><span class="pn">0${i + 1}</span><h3>${x[0]}</h3><p class="muted small">${x[1]}</p></div>`).join("")}</div></div></section>
+      <section class="sec sand"><div class="wrap">
+        <div class="sec-head"><div><div class="eyebrow">수리 요청</div><h2 class="h-lg" style="margin-top:10px">수리점 찾고 예약 요청하기</h2></div><span class="small muted">요청은 무료예요. 견적에 동의하기 전까지 비용이 들지 않아요.</span></div>
+        <form class="detail" id="rqForm" novalidate>
+          <div>
+            <div class="qt">01 · 어떤 고장인가요?</div>
+            <div class="field"><label>진단 카드</label><select id="rqDiag"><option value="">진단 카드 없이 요청할게요</option>${mine.map((d) => { const m = S.model(d.modelId); return `<option value="${d.id}" ${d.id === RQ.diag ? "selected" : ""}>${esc(d.id)} · ${esc(sym(d.symptom).label)} · ${esc(m ? m.name : "모델 모름")} · ${d.result.grade}</option>`; }).join("")}</select>
+              <div class="hint">${mine.length ? "진단 카드를 고르면 증상과 답변이 수리점에 그대로 전달돼요." : `아직 진단 카드가 없어요. <a class="tlink small" href="#/diagnose">무료 증상 진단</a>을 먼저 받으면 점검비 혜택이 커요.`}</div></div>
+            <div id="rqManual"></div>
+            <div class="qt" style="margin-top:30px">02 · 어디서, 어떻게 맡기세요?</div>
+            <div class="field"><label>지역</label><select id="rqRegion"><option value="">지역 고르기</option>${REGIONS.map((x) => `<option>${x}</option>`).join("")}</select></div>
+            <div class="opts cols2" id="rqMethod">${["visit", "parcel"].map((k) => `<button type="button" class="opt ${RQ.method === k ? "on" : ""}" data-method="${k}"><span><div class="ot">${methodKo[k]}</div><div class="od">${k === "visit" ? "가까운 매장에 직접 가져가요" : "택배로 보내고 고쳐서 받아요 · 전국"}</div></span><span class="radio-dot"></span></button>`).join("")}</div>
+            <div class="qt" style="margin-top:30px">03 · 수리점 고르기</div>
+            <div id="shopList"></div>
+            <div class="qt" style="margin-top:30px">04 · 연락받을 정보</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+              <div class="field"><label>이름</label><input type="text" id="rqName" autocomplete="name"/></div>
+              <div class="field"><label>휴대폰</label><input type="tel" id="rqPhone" autocomplete="tel" placeholder="010-0000-0000"/></div></div>
+            <div class="field"><label>희망 날짜 (선택)</label><input type="date" id="rqDate" min="${new Date().toISOString().slice(0, 10)}"/></div>
+            <div class="field"><label>더 알려 줄 내용 (선택)</label><textarea id="rqMemo" rows="3" placeholder="예: 오전에만 방문 가능해요, 데이터는 꼭 살려야 해요"></textarea></div>
+            <div class="err" id="rqErr"></div>
+          </div>
+          <aside class="sticky"><div class="buybox" id="rqSum"></div></aside>
+        </form>
+      </div></section>
+      <section class="sec"><div class="wrap">
+        <div class="sec-head"><div><div class="eyebrow">진행 순서</div><h2 class="h-lg" style="margin-top:10px">요청부터 수리 완료까지</h2></div></div>
+        <ol class="numlist">${steps.map((x, i) => `<li><span class="n">0${i + 1}</span><div><div class="t">${x[0]}</div><div class="d">${x[1]}</div></div></li>`).join("")}</ol>
+      </div></section>
+      <section class="sec sand" id="partner"><div class="wrap two">
+        <div><div class="eyebrow">파트너 모집</div><h2 class="h-lg" style="margin-top:10px">리페어북 제휴 수리점이 되어 주세요</h2>
+          <p class="muted" style="margin-top:16px">진단이 끝난 손님을 연결해 드려요. 증상·모델·사진이 미리 정리돼 와서 점검 시간이 줄고, 리페어북 키트 ‘대신 장착’ 작업도 함께 맡길 수 있어요.</p>
+          <ol class="numlist" style="margin-top:28px"><li><span class="n">01</span><div><div class="t">진단 끝난 손님 연결</div><div class="d">C 판정(수리점 필요) 손님을 지역별로 보내 드려요</div></div></li><li><span class="n">02</span><div><div class="t">키트 장착 대행</div><div class="d">SSD·RAM·구리스 키트 ‘대신 장착’ 주문을 맡아 주세요</div></div></li><li><span class="n">03</span><div><div class="t">수수료 없이 시작</div><div class="d">사전예약 기간에는 연결 수수료를 받지 않아요</div></div></li></ol>
+        </div>
+        <form id="ptForm" class="buybox" novalidate>
+          <div class="eyebrow">제휴 신청</div>
+          <div class="field" style="margin-top:16px"><label>상호</label><input type="text" id="ptName"/></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div class="field"><label>지역</label><select id="ptRegion"><option value="">고르기</option>${REGIONS.map((x) => `<option>${x}</option>`).join("")}</select></div>
+            <div class="field"><label>연락처</label><input type="tel" id="ptPhone" placeholder="010-0000-0000"/></div></div>
+          <div class="qt">잘하는 수리 (여러 개)</div>
+          <div class="chips" id="ptTags">${["전원·메인보드", "화면", "배터리", "침수·충격", "발열·구리스", "키트 장착"].map((x) => `<button type="button" class="chip" data-pt="${x}">${x}</button>`).join("")}</div>
+          <div class="err" id="ptErr"></div>
+          <button class="btn solid block" style="margin-top:20px">제휴 신청하기</button>
+          <p class="small muted" style="margin-top:10px">담당자가 영업일 2일 안에 연락드려요.</p>
+        </form>
+      </div></section>`,
+      bind() {
+        const draw = () => {
+          const d = S.diagnosis(RQ.diag);
+          const symId = d ? d.symptom : RQ.symptom, mId = d ? d.modelId : RQ.modelId;
+          $("#rqManual").innerHTML = d ? `<div class="notice small" style="margin-top:4px">${esc(sym(d.symptom).label)} · ${esc(d.result.why)}</div>` : `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:6px">
+            <div class="field"><label>증상</label><select id="rqSym"><option value="">고르기</option>${SEED.symptoms.map((x) => `<option value="${x.id}" ${x.id === RQ.symptom ? "selected" : ""}>${esc(x.label)}</option>`).join("")}</select></div>
+            <div class="field"><label>노트북</label><select id="rqModel"><option value="">모르겠어요·목록에 없어요</option>${S.s.models.map((x) => `<option value="${x.id}" ${x.id === RQ.modelId ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></div></div>`;
+          $("#rqSym") && $("#rqSym").addEventListener("change", (e) => { RQ.symptom = e.target.value; draw(); });
+          $("#rqModel") && $("#rqModel").addEventListener("change", (e) => { RQ.modelId = e.target.value; draw(); });
+          const tag = S.repairTag[symId];
+          const list = SHOPS.filter((x) => x.methods.includes(RQ.method) && (x.region === RQ.region || (RQ.method === "parcel" && x.region === "전국")))
+            .sort((a, b) => (tag && b.tags.includes(tag)) - (tag && a.tags.includes(tag)));
+          if (RQ.shop && RQ.shop !== "any" && !list.some((x) => x.id === RQ.shop)) RQ.shop = "";
+          $("#shopList").innerHTML = !RQ.region ? `<p class="small muted">지역을 고르면 가까운 제휴 수리점이 나와요.</p>`
+            : list.length ? `<div class="opts">${list.map((x) => { const fit = tag && x.tags.includes(tag); return `<button type="button" class="opt shop ${RQ.shop === x.id ? "on" : ""}" data-shop="${x.id}"><span><div class="ot">${esc(x.name)} ${fit ? `<span class="pill ok">${esc(tag)} 가능</span>` : ""}</div><div class="od">${esc(x.region === "전국" ? x.area : x.region + " " + x.area)} · ${esc(x.hours)}</div><div class="od">${x.tags.map(esc).join(" · ")}</div><div class="od perk">${esc(x.perk)}</div></span><span class="radio-dot"></span></button>`; }).join("")}
+                <button type="button" class="opt ${RQ.shop === "any" ? "on" : ""}" data-shop="any"><span><div class="ot">가장 빨리 볼 수 있는 곳으로</div><div class="od">리페어북이 일정을 맞춰 골라 드려요</div></span><span class="radio-dot"></span></button></div>`
+            : `<div class="notice small">${esc(RQ.region)} 지역 제휴 수리점을 모집하고 있어요. <b style="font-weight:500">택배 수리</b>를 고르면 전국 어디서나 맡길 수 있어요.</div>`;
+          $$("[data-shop]").forEach((b) => b.addEventListener("click", () => { RQ.shop = b.dataset.shop; draw(); }));
+          const shop = SHOPS.find((x) => x.id === RQ.shop), m = S.model(mId);
+          $("#rqSum").innerHTML = `<div class="eyebrow">요청 요약</div>
+            <div class="sum-row" style="margin-top:12px"><span>증상</span><span>${symId ? esc(sym(symId).label) : "-"}</span></div>
+            <div class="sum-row"><span>노트북</span><span>${m ? esc(m.name) : "-"}</span></div>
+            <div class="sum-row"><span>진단 카드</span><span>${d ? esc(d.id) : "없음"}</span></div>
+            <div class="sum-row"><span>방식</span><span>${methodKo[RQ.method]}</span></div>
+            <div class="sum-row"><span>수리점</span><span>${shop ? esc(shop.name) : RQ.shop === "any" ? "가장 빠른 곳" : "-"}</span></div>
+            <div class="sum-row total"><span>혜택</span><span class="small">${d ? (shop ? esc(shop.perk) : "점검비 면제·할인") : "공임 10% 할인"}</span></div>
+            ${d && d.result.urgent ? `<div class="notice stop small" style="margin-top:14px">급한 고장이에요. 전원을 켜지 말고 그대로 맡겨 주세요.</div>` : ""}
+            <button class="btn solid block" style="margin-top:20px" form="rqForm">수리 요청하기</button>
+            <p class="small muted" style="margin-top:10px">견적에 동의하기 전까지 비용이 들지 않아요.</p>`;
+        };
+        $("#rqDiag").addEventListener("change", (e) => { RQ.diag = e.target.value; draw(); });
+        $("#rqRegion").addEventListener("change", (e) => { RQ.region = e.target.value; draw(); });
+        $$("[data-method]").forEach((b) => b.addEventListener("click", () => { RQ.method = b.dataset.method; $$("[data-method]").forEach((x) => x.classList.toggle("on", x === b)); draw(); }));
+        draw();
+        $("#rqForm").addEventListener("submit", (e) => {
+          e.preventDefault();
+          const d = S.diagnosis(RQ.diag), err = $("#rqErr");
+          const symId = d ? d.symptom : RQ.symptom;
+          const name = $("#rqName").value.trim(), phone = $("#rqPhone").value.trim();
+          if (!symId) return (err.textContent = "진단 카드나 증상을 골라 주세요.");
+          if (!RQ.region) return (err.textContent = "지역을 골라 주세요.");
+          if (!RQ.shop) return (err.textContent = "수리점을 골라 주세요.");
+          if (!name || !/^[0-9\-\s]{9,14}$/.test(phone)) return (err.textContent = "이름과 휴대폰 번호를 확인해 주세요.");
+          const x = S.addRepair({ diagnosisId: d ? d.id : "", symptom: symId, modelId: d ? d.modelId : RQ.modelId, region: RQ.region, method: RQ.method, shopId: RQ.shop, date: $("#rqDate").value, name, phone, memo: $("#rqMemo").value.trim() });
+          location.hash = "#/repair/" + x.id;
+        });
+        const PT = new Set();
+        $$("[data-pt]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.pt; PT.has(k) ? PT.delete(k) : PT.add(k); b.classList.toggle("on", PT.has(k)); }));
+        $("#ptForm").addEventListener("submit", (e) => {
+          e.preventDefault();
+          const name = $("#ptName").value.trim(), region = $("#ptRegion").value, phone = $("#ptPhone").value.trim();
+          if (!name || !region || !/^[0-9\-\s]{9,14}$/.test(phone)) return ($("#ptErr").textContent = "상호, 지역, 연락처를 확인해 주세요.");
+          S.addPartner({ name, region, phone, tags: [...PT] });
+          $("#ptForm").reset(); PT.clear(); $$("[data-pt]").forEach((b) => b.classList.remove("on")); $("#ptErr").textContent = "";
+          toast("제휴 신청을 받았어요. 영업일 2일 안에 연락드릴게요.");
+        });
+        if (location.hash.includes("partner")) setTimeout(() => $("#partner").scrollIntoView(), 30);
+      }
+    };
+  }
+  function repairBlock(x) {
+    const shop = SHOPS.find((s) => s.id === x.shopId), m = S.model(x.modelId);
+    return `<div class="eyebrow">${esc(x.id)} · ${fmtDate(x.createdAt)}</div>
+      <div class="serif" style="font-size:21px;margin-top:6px">${esc(sym(x.symptom).label)}${m ? " · " + esc(m.name) : ""}</div>
+      <div class="small muted" style="margin-top:6px">${methodKo[x.method]} · ${shop ? esc(shop.name) : "가장 빠른 제휴 수리점"}${x.date ? " · 희망일 " + esc(x.date) : ""}</div>
+      <ol class="tl">${S.REPAIR_STEPS.map((t, i) => `<li class="${i <= x.status ? "on" : ""}">${t}</li>`).join("")}</ol>`;
+  }
+  function RepairStatus(id) {
+    const x = S.repair(id); if (!x) return NotFound();
+    const shop = SHOPS.find((s) => s.id === x.shopId);
+    return {
+      title: "수리 요청 완료",
+      html: `<div class="wrap page-head"><div class="eyebrow">수리 요청 완료</div><h1>수리점에 요청을 보냈어요</h1></div>
+      <div class="wrap" style="padding-bottom:110px"><div class="two">
+        <div>${repairBlock(x)}
+          <div class="eyebrow" style="margin:40px 0 14px">다음에 할 일</div>
+          <ol class="numlist"><li><span class="n">01</span><div><div class="t">수리점 연락 기다리기</div><div class="d">영업일 하루 안에 ${esc(x.phone)}로 연락드려요</div></div></li>
+          <li><span class="n">02</span><div><div class="t">${x.method === "parcel" ? "택배 보내기" : "방문하기"}</div><div class="d">${x.method === "parcel" ? "충격 방지 포장 후 안내받은 주소로 보내요. 송장 번호는 문자로 알려 주세요." : "예약 시간에 노트북과 충전기를 함께 가져가요"}</div></div></li>
+          <li><span class="n">03</span><div><div class="t">진단 카드 보여 주기</div><div class="d">${x.diagnosisId ? `<a class="tlink small" href="#/diagnosis/${x.diagnosisId}">진단 카드 ${esc(x.diagnosisId)}</a>를 휴대폰으로 보여 주면 돼요` : "진단 카드가 없어도 공임 10% 할인은 적용돼요"}</div></div></li></ol>
+        </div>
+        <div class="buybox"><div class="eyebrow">맡기기 전에</div>
+          <ul class="notes small" style="margin-top:12px"><li>중요한 파일은 가능하면 미리 백업해 두세요.</li><li>로그인 암호는 수리점에 알려 주지 않아도 돼요. 필요하면 임시 계정을 만들어 드려요.</li><li>견적에 동의하기 전에는 수리를 시작하지 않아요.</li></ul>
+          ${shop ? `<div class="small muted" style="margin-top:16px">${esc(shop.name)} · ${esc(shop.hours)}</div>` : ""}
+          <a class="btn block" style="margin-top:18px" href="#/orders">내 주문·요청 보기</a></div>
+      </div></div>`
+    };
+  }
+
   // ---------- Diagnosis card ----------
   const freeGuide = {
     storage: ["설정 › 시스템 › 저장소 › <b>임시 파일</b>에서 필요 없는 항목 지우기", "<b>저장소 센스</b> 켜서 휴지통·임시 파일 자동 정리", "다운로드 폴더에서 큰 파일 정리(크기순 정렬)", "설정 › 앱에서 쓰지 않는 앱 제거", "사진·영상은 클라우드나 외장 저장장치로 옮기기"],
@@ -506,7 +661,7 @@
     else if (g === "A") action = `<div class="eyebrow" style="margin:6px 0 12px">이 진단에 맞는 키트</div>${kitCards(S.kitsOf(d), m, d.code)}`;
     else if (g === "B") action = `<div class="eyebrow" style="margin:6px 0 12px">무료 해결 가이드</div><ol class="numlist">${guide.map((t, i) => `<li><span class="n">0${i + 1}</span><div class="t" style="letter-spacing:0;font-weight:300">${t}</div></li>`).join("")}</ol>`;
     else action = `<div class="notice ${d.result.urgent ? "stop" : ""}">지금은 부품을 사지 않으셔도 돼요. 이 카드를 제휴 수리점에 보여 주시면 점검비가 면제·할인되고, 같은 점검을 다시 받지 않아도 돼요.</div>
-      <button class="btn solid" data-repair>제휴 수리점 연결 요청</button>`;
+      <a class="btn solid" href="#/repair?diag=${d.id}">제휴 수리점 찾고 예약하기</a>`;
     return {
       title: "진단 카드",
       html: `<div class="wrap page-head"><div class="eyebrow">진단 카드</div><h1>${review ? "확인 중이에요" : esc(gradeText[g])}</h1></div>
@@ -880,11 +1035,12 @@
 
   // ---------- Orders ----------
   function Orders() {
-    const os = S.s.orders;
+    const os = S.s.orders, rs = S.s.repairs || [];
     return {
       title: "내 주문",
       html: `<div class="wrap page-head"><div class="eyebrow">내 주문 · 지원 현황</div><h1>내 주문</h1><p class="small muted" style="margin-top:12px">이 브라우저에서 주문한 내역이 보여요.</p></div>
       <div class="wrap" style="padding-bottom:110px">
+        ${rs.length ? `<div class="eyebrow" style="margin:0 0 14px">수리 요청 ${rs.length}건</div>${rs.map((x) => `<div style="border-top:1px solid var(--ink);padding:28px 0 36px">${repairBlock(x)}</div>`).join("")}<div class="eyebrow" style="margin:30px 0 14px">키트 주문</div>` : ""}
         ${os.length ? os.map((o) => { const m = S.model(o.modelId); const sup = S.s.support.filter((x) => x.orderId === o.id); return `
           <div style="border-top:1px solid var(--ink);padding:28px 0 40px">
             <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap"><div><div class="eyebrow">${esc(o.id)} · ${fmtDate(o.createdAt)}</div><div class="serif" style="font-size:21px;margin-top:6px">${esc(m ? m.name : "")} · ${o.kitName ? esc(o.kitName) : o.kind === "pkg" ? "설치 패키지" : o.kind === "ssd2" ? "부품 포함 2TB" : "부품 포함 1TB"}</div></div><div class="serif" style="font-size:19px">${won(o.total)}</div></div>
@@ -964,7 +1120,7 @@
   function drawAdmin() {
     const el = $("#adm"); if (!el) return;
     const s = S.s;
-    const tabs = [["overview", "개요"], ["models", "호환성 DB"], ["diag", `진단 요청 (${s.diagnoses.filter((d) => d.status !== "approved").length})`], ["orders", "주문"], ["support", "지원 요청"], ["requests", "모델 요청"], ["interests", "관심 등록"], ["settings", "설정"]];
+    const tabs = [["overview", "개요"], ["models", "호환성 DB"], ["diag", `진단 요청 (${s.diagnoses.filter((d) => d.status !== "approved").length})`], ["orders", "주문"], ["support", "지원 요청"], ["repairs", `수리 요청 (${(s.repairs || []).filter((x) => x.status < 4).length})`], ["partners", "제휴 신청"], ["requests", "모델 요청"], ["interests", "관심 등록"], ["settings", "설정"]];
     let body = "";
     if (adminTab === "overview") {
       const A = s.diagnoses.filter((d) => d.result.grade === "A").length;
@@ -992,6 +1148,12 @@
         ${s.orders.map((o) => { const m = S.model(o.modelId); return `<tr><td class="small">${esc(o.id)}<div class="muted">${fmtDate(o.createdAt)}</div></td><td class="small">${m ? esc(m.name) : ""}<div class="muted">${esc(o.code)}</div></td><td class="small">${o.lines.map((l) => esc(l[0])).join(" + ")}</td><td>${won(o.total)}</td><td class="small">${esc(o.ship.name)}<div class="muted">${esc(o.ship.phone)}</div></td><td>${S.ORDER_STEPS[o.status]}</td><td>${o.status < 5 ? `<button class="btn sm" data-adv="${o.id}">다음 단계 →</button>` : ""}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">주문이 없어요.</div>`;
     } else if (adminTab === "support") {
       body = s.support.length ? `<table class="tbl"><thead><tr><th>시각</th><th>종류</th><th>연결</th><th>내용</th></tr></thead><tbody>${s.support.map((x) => `<tr><td class="small">${fmtDate(x.at)}</td><td>${{ remote: "원격 지원", repair: "수리점 연결", "remote-diag": "정밀 원격 진단" }[x.type] || esc(x.type)}</td><td class="small">${esc(x.orderId || x.diagnosisId || "")}${x.step ? " · " + esc(x.step) + "단계" : ""}</td><td class="small">${esc(x.msg)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">지원 요청이 없어요.</div>`;
+    } else if (adminTab === "repairs") {
+      const rs = s.repairs || [];
+      body = rs.length ? `<div class="scroll-x"><table class="tbl"><thead><tr><th>요청</th><th>증상·모델</th><th>지역·방식</th><th>수리점</th><th>고객</th><th>상태</th><th></th></tr></thead><tbody>${rs.map((x) => { const m = S.model(x.modelId), sh = SHOPS.find((y) => y.id === x.shopId); return `<tr><td class="small">${esc(x.id)}<div class="muted">${fmtDate(x.createdAt)}</div>${x.diagnosisId ? `<div class="muted">${esc(x.diagnosisId)}</div>` : ""}</td><td class="small">${esc(sym(x.symptom).label)}<div class="muted">${m ? esc(m.name) : "모델 모름"}</div></td><td class="small">${esc(x.region)}<div class="muted">${methodKo[x.method]}</div></td><td class="small">${sh ? esc(sh.name) : "배정 필요"}</td><td class="small">${esc(x.name)}<div class="muted">${esc(x.phone)}</div>${x.memo ? `<div class="muted">${esc(x.memo)}</div>` : ""}</td><td>${S.REPAIR_STEPS[x.status]}</td><td>${x.status < 4 ? `<button class="btn sm" data-radv="${x.id}">다음 단계 →</button>` : ""}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">수리 요청이 없어요.</div>`;
+    } else if (adminTab === "partners") {
+      const ps = s.partners || [];
+      body = `<p class="small muted" style="margin-bottom:16px">등록된 제휴 수리점 ${SHOPS.length}곳(예시 데이터 · assets/data.js의 RB_SHOPS)</p>` + (ps.length ? `<table class="tbl"><thead><tr><th>시각</th><th>상호</th><th>지역</th><th>연락처</th><th>분야</th></tr></thead><tbody>${ps.map((x) => `<tr><td class="small">${fmtDate(x.at)}</td><td>${esc(x.name)}</td><td>${esc(x.region)}</td><td class="small">${esc(x.phone)}</td><td class="small">${x.tags.map(esc).join(" · ")}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">제휴 신청이 없어요.</div>`);
     } else if (adminTab === "requests") {
       const rq = [...s.requests].sort((a, b) => b.count - a.count);
       body = rq.length ? `<ol class="numlist">${rq.map((x, i) => `<li><span class="n">${String(i + 1).padStart(2, "0")}</span><div style="display:flex;justify-content:space-between"><span class="t">${esc(x.name)}</span><span>${x.count}건</span></div></li>`).join("")}</ol>` : `<div class="empty">요청이 없어요.</div>`;
@@ -1017,6 +1179,7 @@
     $$("[data-edit]", el).forEach((b) => b.addEventListener("click", () => editModel(b.dataset.edit)));
     $$("[data-approve]", el).forEach((b) => b.addEventListener("click", () => { const d = S.diagnosis(b.dataset.approve); d.status = "approved"; d.approvedAt = new Date().toISOString(); S.save(); toast("진단 카드를 확정했어요."); drawAdmin(); }));
     $$("[data-grade]", el).forEach((sl) => sl.addEventListener("change", () => { const d = S.diagnosis(sl.dataset.grade); d.result.grade = sl.value; d.result.why = "운영자가 판정을 변경했어요. " + d.result.why; d.result.next = { A: "이 노트북에 맞는 키트를 확인하세요.", B: "무료 해결 가이드를 따라 해 보세요.", C: "진단 카드를 수리점에 보여 주세요." }[sl.value]; S.save(); toast("판정을 " + sl.value + "로 바꿨어요."); drawAdmin(); }));
+    $$("[data-radv]", el).forEach((b) => b.addEventListener("click", () => { const x = S.repair(b.dataset.radv); x.status = Math.min(4, x.status + 1); S.save(); drawAdmin(); }));
     $$("[data-adv]", el).forEach((b) => b.addEventListener("click", () => { const o = S.order(b.dataset.adv); o.status = Math.min(5, o.status + 1); S.save(); drawAdmin(); }));
     $$("[data-st]", el).forEach((i) => i.addEventListener("change", () => { const k = i.dataset.st; S.s.settings[k] = i.type === "number" ? +i.value : i.value.trim(); S.save(); toast("저장했어요."); }));
     $$("[data-stc]", el).forEach((i) => i.addEventListener("change", () => { S.s.settings[i.dataset.stc] = i.checked; S.save(); toast("저장했어요."); }));

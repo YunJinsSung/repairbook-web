@@ -162,6 +162,18 @@ window.RB_ART = {
   }
 };
 
+// 제휴 수리점 (예시 데이터 — 실제 제휴 계약 후 교체)
+window.RB_SHOPS = [
+  { id: "s-gangnam", name: "제휴 수리점 A · 강남", region: "서울", area: "강남구", tags: ["전원·메인보드", "화면", "배터리", "침수·충격", "키트 장착"], methods: ["visit", "parcel"], hours: "평일 10–19시 · 토 10–15시", perk: "진단 카드 지참 시 점검비 면제" },
+  { id: "s-mapo", name: "제휴 수리점 B · 마포", region: "서울", area: "마포구", tags: ["화면", "배터리", "발열·구리스", "키트 장착"], methods: ["visit"], hours: "평일 11–20시", perk: "진단 카드 지참 시 점검비 면제" },
+  { id: "s-bundang", name: "제휴 수리점 C · 분당", region: "경기", area: "성남시 분당구", tags: ["전원·메인보드", "침수·충격", "화면"], methods: ["visit", "parcel"], hours: "평일 10–19시", perk: "점검비 50% 할인" },
+  { id: "s-incheon", name: "제휴 수리점 D · 부평", region: "인천", area: "부평구", tags: ["배터리", "발열·구리스", "키트 장착"], methods: ["visit"], hours: "평일 10–19시 · 토 10–14시", perk: "진단 카드 지참 시 점검비 면제" },
+  { id: "s-busan", name: "제휴 수리점 E · 해운대", region: "부산", area: "해운대구", tags: ["전원·메인보드", "화면", "배터리", "키트 장착"], methods: ["visit", "parcel"], hours: "평일 10–19시", perk: "점검비 50% 할인" },
+  { id: "s-daejeon", name: "제휴 수리점 F · 유성", region: "대전", area: "유성구", tags: ["배터리", "발열·구리스", "키트 장착", "화면"], methods: ["visit"], hours: "평일 10–18시", perk: "진단 카드 지참 시 점검비 면제" },
+  { id: "s-parcel", name: "리페어북 택배 수리 접수", region: "전국", area: "택배 왕복", tags: ["전원·메인보드", "화면", "배터리", "침수·충격", "발열·구리스", "키트 장착"], methods: ["parcel"], hours: "접수 24시간 · 입고 후 영업일 3–5일", perk: "왕복 택배비 리페어북 부담(진단 카드 C 판정)" }
+];
+window.RB_REGIONS = ["서울", "경기", "인천", "부산", "대구", "대전", "광주", "울산", "세종", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"];
+
 // 키트 라인업
 window.RB_KITS = {
   "ssd-add":  { name: "SSD 추가 키트", short: "빈 자리에 SSD를 하나 더", time: "약 30분",

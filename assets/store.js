@@ -7,7 +7,7 @@
 
   function fresh() {
     const s = clone(window.RB_SEED);
-    return { version: s.version, settings: s.settings, models: s.models, diagnoses: [], upgrades: [], orders: [], requests: [], interests: [], support: [], progress: {} };
+    return { version: s.version, settings: s.settings, models: s.models, diagnoses: [], upgrades: [], orders: [], repairs: [], partners: [], requests: [], interests: [], support: [], progress: {} };
   }
   function load() {
     if (mem) return mem;
@@ -246,6 +246,18 @@
       if (r) r.count++; else s.requests.push({ key, name: name || code, code: code || "", count: 1, at: new Date().toISOString() });
       save();
     },
+    REPAIR_STEPS: ["요청 접수", "수리점 확인", "방문·입고", "점검·견적", "수리 완료"],
+    repairTag: { power: "전원·메인보드", display: "화면", battery: "배터리", damage: "침수·충격", slow: "발열·구리스", storage: "키트 장착" },
+    addRepair(x) {
+      const s = load();
+      x.id = "RB-R-" + stamp() + "-" + rid();
+      x.createdAt = new Date().toISOString();
+      x.status = 0;
+      s.repairs.unshift(x); save();
+      return x;
+    },
+    repair(id) { return load().repairs.find((x) => x.id === id); },
+    addPartner(x) { const s = load(); x.at = new Date().toISOString(); s.partners.unshift(x); save(); },
     addInterest(i) { const s = load(); i.at = new Date().toISOString(); s.interests.unshift(i); save(); },
     addSupport(x) { const s = load(); x.at = new Date().toISOString(); x.id = "S-" + rid(); s.support.unshift(x); save(); return x; }
   };

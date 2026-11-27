@@ -400,3 +400,14 @@ ul.notes li + li { margin-top: 4px; }
 .lineup-card .lp span { margin-left: 6px; font-family: var(--sans); }
 @media (max-width: 900px) { .lineup { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .lineup { grid-template-columns: 1fr; } .kit-cta-card { flex-direction: column; align-items: flex-start; } .kc-side { align-items: flex-start; text-align: left; } .kit-inbox ol { columns: 1; } }
+
+/* Repair brokerage */
+.perks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; }
+.perks .pn { font-family: var(--display); font-size: 13px; color: var(--ink-3); }
+.perks h3 { font-size: 18px; margin: 10px 0 8px; }
+.opt.shop .ot .pill { margin-left: 6px; vertical-align: 2px; }
+.opt.shop .od + .od { margin-top: 2px; }
+.opt.shop .perk { color: var(--ok); }
+.field select { width: 100%; }
+@media (max-width: 900px) { .perks { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .perks { grid-template-columns: 1fr; } }
