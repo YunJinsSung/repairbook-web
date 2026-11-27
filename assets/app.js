@@ -33,7 +33,7 @@
   }
   const routes = {
     "": Home, diagnose: Diagnose, diagnosis: DiagnosisCard, models: Models, model: ModelDetail,
-    order: Order, done: Done, guide: Guide, orders: Orders, admin: Admin, kit: Kit
+    order: Order, done: Done, guide: Guide, orders: Orders, admin: Admin, kit: Kit, upgrade: Upgrade
   };
   function render() {
     const r = parse();
@@ -106,7 +106,7 @@
         <div class="hero-word">REPAIRBOOK</div>
         <div class="hero-foot">
           <p>새로 사기 전에, 하나 더 꽂아 보세요.</p>
-          <div class="hero-cta"><a class="btn solid" href="#/diagnose">무료 증상 진단</a><a class="btn light" href="#/models">내 모델 찾기</a></div>
+          <div class="hero-cta"><a class="btn solid" href="#/diagnose">무료 증상 진단</a><a class="btn light" href="#/upgrade">업그레이드 진단</a><a class="btn light" href="#/models">내 모델 찾기</a></div>
         </div>
       </section>
 
@@ -337,6 +337,133 @@
     if (result.requestModel && m) S.addRequest(m.name, W.code);
     const d = S.addDiagnosis({ symptom: W.symptom, modelId: W.modelId, code: W.code, input, result, photo: W.photo, name: W.name, contact: W.contact });
     location.hash = "#/diagnosis/" + d.id;
+  }
+
+  // ---------- Upgrade diagnosis ----------
+  let U = null;
+  const UPS = [
+    { id: "ssd", t: "SSD 업그레이드", d: "저장공간을 늘려요. 빈 자리가 있으면 추가, 없으면 더 큰 것으로 교체해요." },
+    { id: "ram", t: "RAM 업그레이드", d: "메모리를 늘려 여러 프로그램을 동시에 써도 덜 버벅이게 해요." },
+    { id: "grease", t: "서멀 구리스 재도포", d: "굳은 구리스를 새로 발라 발열·팬 소음·성능 저하를 줄여요." }
+  ];
+  function Upgrade(r) {
+    const q0 = r.q.get("want");
+    U = { step: 0, wants: q0 ? q0.split(",").filter((x) => UPS.some((u) => u.id === x)) : [], mode: "pick", brand: "", modelId: "", code: "",
+      curGB: "", goal: "", ramGB: "", ramUse: "", age: "", heat: "", throttle: "", contact: "" };
+    return {
+      title: "업그레이드 진단",
+      html: `<div class="wrap page-head" style="padding-bottom:10px"><div class="eyebrow">업그레이드 진단 · 무료 · 약 2분</div></div><div class="wrap" style="padding-bottom:110px"><div class="wiz" id="upz"></div></div>`,
+      bind: drawUp
+    };
+  }
+  function uopt(k, v, label, desc) {
+    const on = String(U[k]) === String(v);
+    return `<button class="opt ${on ? "on" : ""}" data-uset="${k}:${v}"><span><div class="ot">${label}</div>${desc ? `<div class="od">${desc}</div>` : ""}</span><span class="radio-dot"></span></button>`;
+  }
+  const uq = (title, k, opts, cols) => `<div class="qblock"><div class="qt">${title}</div><div class="opts ${cols ? "cols" + cols : ""}">${opts.map((o) => uopt(k, o[0], o[1], o[2])).join("")}</div></div>`;
+  function upJudge(m) {
+    const info = (window.RB_UPGRADE || {})[m.id];
+    const out = [];
+    const pend = (id) => ({ id, v: "pending", label: "확인 중", why: "이 모델은 아직 검수 중이라 판정할 수 없어요.", next: "모델 정보가 확인되면 연락드려요." });
+    U.wants.forEach((id) => {
+      if (!info) return out.push(pend(id));
+      if (id === "ssd") {
+        if (info.ssd === "pending" || !m.verified) return out.push(pend(id));
+        const big = U.goal === "2000" || +U.curGB >= 1000;
+        if (info.ssd === "add") {
+          const rec = Math.min(big ? 2 : 1, m.maxTB || 1);
+          out.push({ id, v: "ok", label: "추가 가능", why: `빈 M.2 슬롯이 ${m.emptySlots}개 있어요. 지금 SSD는 그대로 두고 하나 더 꽂아요(${m.ssdSpec}).`,
+            next: `추천: ${rec}TB 추가 키트${(big && rec < 2) ? ` — 이 모델은 ${m.maxTB}TB까지만 판매해요` : ""}.`, cta: `<a class="btn solid sm" href="#/model/${m.id}${U.code ? "?code=" + encodeURIComponent(U.code) : ""}">키트 보기</a>` });
+        } else {
+          const rec = big ? 2 : 1;
+          out.push({ id, v: "replace", label: "교체로 가능", why: `SSD 슬롯이 1개뿐이라 추가는 안 돼요. 지금 SSD를 더 큰 것으로 바꾸고, 기존 데이터는 그대로 복제해서 옮겨요(${m.ssdSpec}).`,
+            next: `추천: ${rec}TB로 교체 · 데이터 복제 안내 포함. 교체 키트는 상담 후 보내 드려요.` });
+        }
+      }
+      if (id === "ram") {
+        if (info.ram === null) return out.push(pend(id));
+        if (!info.ram) return out.push({ id, v: "no", label: "불가", why: info.ramNote,
+          next: "대신 시작 프로그램 줄이기·브라우저 탭 정리로 메모리 여유를 만들 수 있어요. 저장공간 여유가 15% 미만이면 SSD 업그레이드도 체감 속도에 도움이 돼요." });
+        const cur = +U.ramGB || 0;
+        const rec = cur <= 8 ? "32GB (16GB × 2개로 교체)" : cur <= 16 ? "32GB (16GB 1개 추가 · 같은 규격으로 맞춤)" : "64GB (32GB × 2개)";
+        out.push({ id, v: "ok", label: "가능", why: info.ramNote, next: `추천: ${rec}. ${U.ramUse === "light" ? "문서·웹 위주라면 지금 용량으로도 충분할 수 있어요." : "작업량에 비해 메모리가 부족한 상태라 효과가 커요."}` });
+      }
+      if (id === "grease") {
+        if (!info.grease) return out.push(pend(id));
+        const need = U.age === "old" || U.heat === "yes" || U.throttle === "yes";
+        const hard = info.grease >= 5;
+        if (!need) out.push({ id, v: "later", label: "아직 불필요", why: "사용 기간이 짧고 발열·성능 저하 신호가 없어요. 지금 바르면 보증만 손해예요.", next: "보통 2~3년 뒤, 팬 소음이 커지거나 뜨거워지면 다시 진단해 주세요." });
+        else out.push({ id, v: "ok", label: hard ? "가능 · 수리점 권장" : "가능", why: `${U.heat === "yes" ? "발열·팬 소음이 커졌고, " : ""}${U.age === "old" ? "2년 넘게 쓰셔서 " : ""}구리스가 굳었을 가능성이 커요. 난이도 ${"●".repeat(info.grease)}${"○".repeat(5 - info.grease)}`,
+          next: `${info.greaseNote} ${hard ? "제휴 수리점 작업으로 연결해 드려요." : "구리스·알코올 패드·헤라가 든 재도포 키트와 영상 가이드로 진행해요."}` });
+      }
+    });
+    return { out, src: info ? info.src : "" };
+  }
+  function drawUp() {
+    const el = $("#upz"); if (!el) return;
+    const total = 4, st = U.step, names = ["업그레이드 선택", "노트북", "현재 상태", "결과"];
+    const prog = `<div class="wiz-prog">${Array.from({ length: total }, (_, i) => `<span class="${i <= st ? "on" : ""}"></span>`).join("")}</div><div class="wiz-step small muted">${st + 1} / ${total} · ${names[st]}</div>`;
+    const m = S.model(U.modelId);
+    const nav = (label = "다음") => `<div class="err" id="err"></div><div class="wiz-nav"><button class="btn light" data-back>이전</button><button class="btn solid" data-next>${label}</button></div>`;
+    let body = "";
+    if (st === 0) {
+      body = `<h2>어떤 업그레이드를 원하세요?</h2><p class="sub">여러 개를 함께 골라도 돼요. 내 노트북에서 되는지, 안 되면 왜 안 되는지 알려 드려요.</p>
+        <div class="up-grid">${UPS.map((u) => `<button class="up-card ${U.wants.includes(u.id) ? "on" : ""}" data-want="${u.id}"><span class="check"></span><div class="st">${u.t}</div><div class="sd">${u.d}</div></button>`).join("")}</div>
+        <div class="err" id="err"></div><div class="wiz-nav"><span></span><button class="btn solid" data-next>다음</button></div>`;
+    } else if (st === 1) {
+      const brands = [...new Set(S.s.models.map((x) => x.brand))];
+      const list = U.brand ? S.s.models.filter((x) => x.brand === U.brand) : [];
+      body = `<h2>어떤 노트북을 쓰세요?</h2><p class="sub">모델 이름만 알아도 돼요. 같은 시리즈라도 모델마다 슬롯 구성이 달라요.</p>
+        <div class="seg"><button class="${U.mode === "pick" ? "on" : ""}" data-umode="pick">모델 이름으로 고르기</button><button class="${U.mode === "code" ? "on" : ""}" data-umode="code">모델 코드로 찾기</button></div>
+        ${U.mode === "pick" ? `<div class="qt">제조사</div><div class="chips">${brands.map((b) => `<button class="chip ${U.brand === b ? "on" : ""}" data-ubrand="${b}">${esc(brandKo[b] || b)}</button>`).join("")}</div>
+          ${U.brand ? `<div class="qt" style="margin-top:24px">모델</div><div class="opts">${list.map((x) => `<button class="opt ${U.modelId === x.id ? "on" : ""}" data-umodel="${x.id}"><span><div class="ot">${esc(x.name)}</div><div class="od">${esc(x.codes.join(" · "))}</div></span><span class="radio-dot"></span></button>`).join("")}</div>` : ""}`
+        : `${howToCode}${searchBox("upSearch", "모델 코드나 이름 입력")}`}
+        ${m ? `<div class="notice ok" style="margin-top:22px">선택한 모델: <b style="font-weight:500">${esc(m.name)}</b> <span class="small muted">${esc(U.code || "")}</span></div>` : ""}
+        <p class="small muted" style="margin-top:18px">목록에 없나요? <a class="tlink small" href="#/models">모델 찾기에서 추가 요청</a>하면 정보를 찾아 알려 드려요.</p>
+        <div class="err" id="err"></div><div class="wiz-nav"><button class="btn light" data-back>이전</button><button class="btn solid" data-next ${m ? "" : "disabled"}>다음</button></div>`;
+    } else if (st === 2) {
+      const w = (id) => U.wants.includes(id);
+      body = `<h2>지금 상태를 알려 주세요</h2><p class="sub">추천 용량과 필요 여부를 정하는 데 써요.</p>
+        ${w("ssd") ? `<div class="qhead">SSD</div>${uq("지금 SSD 전체 용량", "curGB", [["256", "256GB"], ["512", "512GB"], ["1000", "1TB"], ["2000", "2TB 이상"]], 4)}${uq("얼마나 늘리고 싶으세요?", "goal", [["1000", "1TB 정도"], ["2000", "2TB 이상"], ["unk", "추천해 주세요"]], 3)}` : ""}
+        ${w("ram") ? `<div class="qhead">RAM</div><div class="howto small">작업 관리자(Ctrl + Shift + Esc) › 성능 › 메모리 오른쪽 위 숫자가 지금 용량이에요.</div>${uq("지금 메모리 용량", "ramGB", [["8", "8GB"], ["16", "16GB"], ["32", "32GB 이상"], ["0", "모르겠어요"]], 4)}${uq("주로 어떤 작업을 하세요?", "ramUse", [["light", "문서·웹·영상 시청"], ["multi", "탭·프로그램 여러 개 동시에"], ["heavy", "영상 편집·개발·게임"]], 3)}` : ""}
+        ${w("grease") ? `<div class="qhead">발열</div>${uq("노트북을 쓴 기간", "age", [["new", "1년 미만"], ["mid", "1~2년"], ["old", "2년 이상"]], 3)}${uq("예전보다 뜨겁거나 팬 소리가 커졌나요?", "heat", [["yes", "네"], ["no", "아니요"]], 2)}${uq("오래 쓰면 갑자기 느려지나요?", "throttle", [["yes", "네, 뜨거워지면 느려져요"], ["no", "아니요"]], 2)}` : ""}
+        ${nav("결과 보기")}`;
+    } else {
+      const res = upJudge(m);
+      const tname = (id) => UPS.find((u) => u.id === id).t;
+      const pill = { ok: "ok", replace: "ok", no: "no", pending: "pending", later: "pending" };
+      body = `<h2>${esc(m.name)} 업그레이드 진단 결과</h2><p class="sub">${esc(U.code || m.codes.join(" · "))}</p>
+        <div class="up-results">${res.out.map((x) => `<div class="up-res ${x.v}"><div class="up-res-head"><b>${tname(x.id)}</b><span class="pill ${pill[x.v]}">${x.label}</span></div>
+          <p>${esc(x.why)}</p><p class="muted small">${esc(x.next)}</p>${x.cta || ""}</div>`).join("")}</div>
+        ${res.src ? `<p class="small muted" style="margin-top:14px">근거: ${esc(res.src)}</p>` : ""}
+        <div class="notice" style="margin-top:22px">직접 분해·업그레이드하면 해당 부위의 제조사 무상 수리가 제한될 수 있어요. 불안하면 제휴 수리점 작업으로 연결해 드려요.</div>
+        ${res.out.some((x) => x.v === "ok" || x.v === "replace") ? `<div class="field" style="margin-top:26px"><label>상담받을 연락처 (이메일 또는 휴대폰)</label><input type="text" id="uContact" value="${esc(U.contact)}"/></div>
+        <div class="wiz-nav"><button class="btn light" data-back>답변 고치기</button><button class="btn solid" data-uapply>업그레이드 상담 신청</button></div>` : `<div class="wiz-nav"><button class="btn light" data-back>답변 고치기</button><a class="btn" href="#/diagnose">증상 진단 해 보기</a></div>`}`;
+    }
+    el.innerHTML = prog + body;
+    const say = (t) => { const e = $("#err"); if (e) e.textContent = t; };
+    $$("[data-want]", el).forEach((b) => b.addEventListener("click", () => { const id = b.dataset.want; U.wants = U.wants.includes(id) ? U.wants.filter((x) => x !== id) : [...U.wants, id]; drawUp(); }));
+    $$("[data-umode]", el).forEach((b) => b.addEventListener("click", () => { U.mode = b.dataset.umode; drawUp(); }));
+    $$("[data-ubrand]", el).forEach((b) => b.addEventListener("click", () => { if (U.brand !== b.dataset.ubrand) { U.brand = b.dataset.ubrand; U.modelId = ""; U.code = ""; } drawUp(); }));
+    $$("[data-umodel]", el).forEach((b) => b.addEventListener("click", () => { const mm = S.model(b.dataset.umodel); U.modelId = mm.id; U.code = mm.codes.length === 1 ? mm.codes[0] : ""; drawUp(); }));
+    bindSearch("upSearch", (mm, code) => { U.modelId = mm.id; U.brand = mm.brand; U.code = code; drawUp(); });
+    $$("[data-uset]", el).forEach((b) => b.addEventListener("click", () => { const i = b.dataset.uset.indexOf(":"); U[b.dataset.uset.slice(0, i)] = b.dataset.uset.slice(i + 1); drawUp(); }));
+    $("[data-back]", el) && $("[data-back]", el).addEventListener("click", () => { U.step--; drawUp(); });
+    $("[data-next]", el) && $("[data-next]", el).addEventListener("click", () => {
+      if (U.step === 0 && !U.wants.length) return say("하나 이상 골라 주세요.");
+      if (U.step === 2) {
+        const need = [].concat(U.wants.includes("ssd") ? ["curGB", "goal"] : [], U.wants.includes("ram") ? ["ramGB", "ramUse"] : [], U.wants.includes("grease") ? ["age", "heat", "throttle"] : []);
+        if (need.some((k) => !U[k])) return say("모든 질문에 답해 주세요.");
+      }
+      U.step++; drawUp(); scrollTo(0, 0);
+    });
+    $("[data-uapply]", el) && $("[data-uapply]", el).addEventListener("click", () => {
+      U.contact = $("#uContact").value.trim();
+      if (!U.contact) { toast("연락처를 입력해 주세요."); return; }
+      const res = upJudge(m);
+      S.addSupport({ type: "upgrade", modelId: m.id, msg: `업그레이드 상담: ${res.out.map((x) => UPS.find((u) => u.id === x.id).t + "=" + x.label).join(", ")} · ${U.contact}` });
+      toast("업그레이드 상담 신청을 받았어요. 연락처로 안내해 드릴게요.");
+    });
   }
 
   // ---------- Diagnosis card ----------

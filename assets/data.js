@@ -158,6 +158,27 @@ window.RB_ART = {
   }
 };
 
+// 업그레이드 진단 기준 (모델별). ssd: add=빈 슬롯 추가 / replace=교체만 / pending=검수 중
+// ram: true=슬롯 있음 / false=온보드(불가). grease: 1~5 난이도, 0=검수 중
+window.RB_UPGRADE = {
+  "gram-2024": { ssd: "add", ram: false, ramNote: "LPDDR5X 온보드 메모리(메인보드에 납땜)라 늘릴 수 없어요.", grease: 3,
+    greaseNote: "얇은 히트파이프 1개 구조예요. 배터리 커넥터를 먼저 분리해야 해요.", src: "LG전자 확장 슬롯 안내 · Kingston 호환표(메모리 소켓 0개)" },
+  "gram-2023": { ssd: "add", ram: false, ramNote: "LPDDR5 온보드 메모리라 늘릴 수 없어요.", grease: 3,
+    greaseNote: "얇은 히트파이프 1개 구조예요. 배터리 커넥터를 먼저 분리해야 해요.", src: "LG전자 확장 슬롯 안내" },
+  "grambook-ai-2026": { ssd: "pending", ram: null, ramNote: "세부 모델 코드와 실물 검수 전이라 아직 판정할 수 없어요.", grease: 0,
+    greaseNote: "실물 검수 후 안내해요.", src: "검수 진행 중" },
+  "galaxy-book4": { ssd: "add", ram: false, ramNote: "삼성전자서비스 공식 안내: 갤럭시 북4 계열은 온보드 메모리이고 추가 슬롯이 없어 RAM 업그레이드를 지원하지 않아요.", grease: 3,
+    greaseNote: "팬 1개·히트파이프 1개 구조라 비교적 수월해요.", src: "삼성전자서비스 메모리 업그레이드 안내" },
+  "galaxy-book4-pro": { ssd: "add", ram: false, ramNote: "LPDDR5X 온보드 메모리예요. 삼성전자서비스 공식 안내상 슬롯이 없어 늘릴 수 없어요.", grease: 4,
+    greaseNote: "얇은 본체라 뒷판 걸쇠가 많아요. 헤라를 천천히 써야 해요.", src: "삼성전자서비스 메모리 업그레이드 안내 (NT940XGK·NT960XGK)" },
+  "galaxy-book4-ultra": { ssd: "add", ram: false, ramNote: "LPDDR5X 온보드 메모리라 늘릴 수 없어요.", grease: 5,
+    greaseNote: "CPU와 외장 그래픽(GPU) 두 곳을 모두 발라야 해요. 난이도가 높아 수리점 작업을 권해요.", src: "삼성 커뮤니티 공식 답변 · 삼성전자서비스 안내" },
+  "galaxy-book4-pro360": { ssd: "replace", ram: false, ramNote: "LPDDR5X 온보드 메모리라 늘릴 수 없어요.", grease: 4,
+    greaseNote: "2-in-1 구조라 힌지 쪽 케이블을 조심해야 해요.", src: "삼성전자서비스 SSD 안내 — 슬롯 1개, M.2 2280 단면 NVMe만 호환" },
+  "thinkpad-t14-g5": { ssd: "replace", ram: true, ramNote: "DDR5 SO-DIMM 슬롯 2개, 최대 64GB(DDR5-5600). 16GB 모델은 보통 1개가 비어 있어요.", grease: 2,
+    greaseNote: "뒷판 나사가 빠지지 않는 구조(캡티브)라 분해가 쉬운 편이에요.", src: "Lenovo PSREF 사양서 · Notebookcheck 리뷰" }
+};
+
 // 실사 사진 (Unsplash 무료 라이선스, 핫링크). 실물 촬영본이 생기면 이 표만 바꾸면 돼요.
 window.RB_PHOTO = {
   hero:      ["1588872657578-7efd1f1555ed", "흰 책상 위에 놓인 윈도우 노트북"],
