@@ -1,5 +1,5 @@
 (function () {
-  const S = window.Store, ART = window.RB_ART, SEED = window.RB_SEED, PH = window.RB_PHOTO, BR = window.RB_BRAND;
+  const S = window.Store, ART = window.RB_ART, SEED = window.RB_SEED, PH = window.RB_PHOTO, BR = window.RB_BRAND, VID = window.RB_VIDEO || {};
   const photo = (p, w = 1200, eager) => `<img class="ph" src="https://images.unsplash.com/photo-${p[0]}?auto=format&fit=crop&w=${w}&q=75" alt="${p[1]}"${eager ? "" : ' loading="lazy"'} />`;
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -165,39 +165,64 @@
 
   // ---------- Diagnose wizard ----------
   let W = null;
+  const brandKo = { Samsung: "삼성", LG: "LG", Lenovo: "레노버" };
   function Diagnose(r) {
     const q = r.q;
-    W = { step: 0, symptom: q.get("symptom") || "", modelId: q.get("model") || "", code: q.get("code") || "", totalGB: "", freeGB: "", diskHigh: null, memHigh: null, powerFixed: null, extDisplay: "", photo: "", name: "", contact: "" };
+    W = { step: 0, symptom: q.get("symptom") || "", modelId: q.get("model") || "", code: q.get("code") || "", mode: "pick", brand: "",
+      totalGB: "", freeGB: "", hog: "", cleaned: null, need: "", diskHigh: null, memHigh: null, when: "", heat: null,
+      powerFixed: null, lamp: "", before: "", extDisplay: "", look: "", hours: "", swell: null, what: "", since: "",
+      age: "", onset: "", recent: "", photo: "", name: "", contact: "" };
+    const m0 = S.model(W.modelId); if (m0) W.brand = m0.brand;
     if (W.symptom) W.step = 1;
     if (W.symptom && W.modelId) W.step = 2;
     return {
       title: "무료 증상 진단",
-      html: `<div class="wrap page-head" style="padding-bottom:10px"><div class="eyebrow">무료 증상 진단 · 약 1분</div></div><div class="wrap" style="padding-bottom:110px"><div class="wiz" id="wiz"></div></div>`,
+      html: `<div class="wrap page-head" style="padding-bottom:10px"><div class="eyebrow">무료 증상 진단 · 약 3분</div></div><div class="wrap" style="padding-bottom:110px"><div class="wiz" id="wiz"></div></div>`,
       bind: drawWiz
     };
   }
+  function q(title, k, opts, cols) {
+    return `<div class="qblock"><div class="qt">${title}</div><div class="opts ${cols ? "cols" + cols : ""}">${opts.map((o) => opt(k, o[0], o[1], o[2])).join("")}</div></div>`;
+  }
+  function modelStep(m) {
+    const optional = !["storage", "slow"].includes(W.symptom);
+    const brands = [...new Set(S.s.models.map((x) => x.brand))];
+    const list = W.brand ? S.s.models.filter((x) => x.brand === W.brand) : [];
+    const pick = `<div class="qt">제조사</div><div class="chips">${brands.map((b) => `<button class="chip ${W.brand === b ? "on" : ""}" data-brand="${b}">${esc(brandKo[b] || b)}</button>`).join("")}</div>
+      ${W.brand ? `<div class="qt" style="margin-top:24px">모델</div><div class="opts">${list.map((x) => `<button class="opt ${W.modelId === x.id ? "on" : ""}" data-model="${x.id}"><span><div class="ot">${esc(x.name)}</div><div class="od">${esc(x.codes.join(" · "))}</div></span><span class="pill ${S.verdict(x)}">${S.verdictShort(S.verdict(x))}</span></button>`).join("")}</div>` : `<p class="small muted" style="margin-top:14px">제조사를 고르면 모델 목록이 나와요.</p>`}
+      ${m && m.codes.length > 1 ? `<div class="qt" style="margin-top:24px">세부 모델 (알면 골라 주세요)</div><div class="chips">${m.codes.map((c) => `<button class="chip ${W.code === c ? "on" : ""}" data-code="${c}">${c}</button>`).join("")}<button class="chip ${!W.code ? "on" : ""}" data-code="">모르겠어요</button></div><p class="small muted" style="margin-top:8px">화면 크기에 따라 코드가 달라요. 노트북 바닥 스티커의 ‘모델명’에서 확인할 수 있어요.</p>` : ""}`;
+    const code = `${howToCode}${searchBox("wizSearch", "모델 코드나 이름 입력")}`;
+    return `<h2>어떤 노트북을 쓰세요?</h2><p class="sub">${optional ? "모르면 건너뛰어도 돼요." : "모델 이름만 알아도 골라서 진행할 수 있어요. 모델 코드를 알면 세부 모델까지 정확히 확인해요."}</p>
+      <div class="seg"><button class="${W.mode === "pick" ? "on" : ""}" data-mode="pick">모델 이름으로 고르기</button><button class="${W.mode === "code" ? "on" : ""}" data-mode="code">모델 코드로 찾기</button></div>
+      ${W.mode === "pick" ? pick : code}
+      ${m ? `<div class="notice ok" style="margin-top:22px">선택한 모델: <b style="font-weight:500">${esc(m.name)}</b> <span class="small muted">${esc(W.code || "세부 코드 미확인")}</span>${!W.code ? `<div class="small muted" style="margin-top:4px">세부 모델 코드는 주문할 때 한 번 더 확인해요.</div>` : ""}</div>` : ""}
+      <div class="wiz-nav"><button class="btn light" data-back>이전</button>
+      <div style="display:flex;gap:10px">${!m ? `<button class="btn light" data-skip>목록에 없거나 모르겠어요</button>` : ""}<button class="btn solid" data-next ${m ? "" : "disabled"}>다음</button></div></div>`;
+  }
   function drawWiz() {
     const el = $("#wiz"); if (!el) return;
-    const total = 4, st = W.step;
-    const prog = `<div class="wiz-prog">${Array.from({ length: total }, (_, i) => `<span class="${i <= st ? "on" : ""}"></span>`).join("")}</div>`;
+    const total = 5, st = W.step;
+    const names = ["증상", "노트북", "자가 점검", "사용 환경", "사진·연락처"];
+    const prog = `<div class="wiz-prog">${Array.from({ length: total }, (_, i) => `<span class="${i <= st ? "on" : ""}"></span>`).join("")}</div><div class="wiz-step small muted">${st + 1} / ${total} · ${names[st]}</div>`;
     const m = S.model(W.modelId);
+    const nav = `<div class="err" id="err"></div><div class="wiz-nav"><button class="btn light" data-back>이전</button><button class="btn solid" data-next>다음</button></div>`;
     let body = "";
     if (st === 0) {
       body = `<h2>어떤 점이 불편하세요?</h2><p class="sub">부품 이름은 몰라도 돼요. 가장 가까운 걸 하나만 골라 주세요.</p>
         <div class="sym-grid">${SEED.symptoms.map((s) => `<button class="sym" data-sym="${s.id}"><span class="si">${ART[s.icon]}</span><span><div class="st">${esc(s.label)}</div><div class="sd">${esc(s.desc)}</div></span></button>`).join("")}</div>`;
     } else if (st === 1) {
-      const optional = !["storage", "slow"].includes(W.symptom);
-      body = `<h2>어떤 노트북을 쓰세요?</h2><p class="sub">${optional ? "모르면 건너뛰어도 돼요." : "같은 이름이라도 세부 모델마다 빈 자리가 달라서, 모델 코드로 확인해요."}</p>
-        ${howToCode}
-        ${searchBox("wizSearch", "모델 코드나 이름 입력")}
-        ${m ? `<div class="notice ok" style="margin-top:22px">선택한 모델: <b style="font-weight:500">${esc(m.name)}</b> <span class="small muted">${esc(W.code)}</span></div>` : ""}
-        <div class="wiz-nav"><button class="btn light" data-back>이전</button>
-        <div style="display:flex;gap:10px">${!m ? `<button class="btn light" data-skip>모르겠어요</button>` : ""}<button class="btn solid" data-next ${m ? "" : "disabled"}>다음</button></div></div>`;
+      body = modelStep(m);
     } else if (st === 2) {
-      body = `<h2>${esc(sym(W.symptom).label)}</h2>` + selfCheck();
+      body = `<h2>${esc(sym(W.symptom).label)}</h2>` + selfCheck() + nav;
+    } else if (st === 3) {
+      body = `<h2>사용 환경을 알려 주세요</h2><p class="sub">같은 증상이라도 쓰신 기간과 시작된 계기에 따라 원인이 달라져요.</p>
+        ${q("노트북을 쓴 지 얼마나 됐나요?", "age", [["new", "1년 미만"], ["mid", "1~3년"], ["old", "3년 이상"], ["unk", "모르겠어요"]], 4)}
+        ${q("증상은 어떻게 시작됐나요?", "onset", [["sudden", "어느 날 갑자기"], ["gradual", "점점 심해졌어요"], ["unk", "잘 모르겠어요"]], 3)}
+        ${q("증상 직전에 이런 일이 있었나요?", "recent", [["update", "윈도우 업데이트"], ["install", "새 프로그램 설치"], ["drop", "떨어뜨림·충격"], ["liquid", "물·음료를 쏟음"], ["none", "특별한 일 없음"]], 3)}
+        ${nav}`;
     } else {
       body = `<h2>확인 사진을 올려 주세요</h2><p class="sub">사진이 있으면 더 정확해요. 사람이 직접 보고 판정해요(영업일 24시간 이내).</p>
-        <label class="upload" id="up">${W.photo ? `<img src="${W.photo}" alt="올린 사진"/>사진을 바꾸려면 누르세요` : "누르거나 끌어다 놓아 사진 올리기<br/><span class='small'>예: 설정 › 시스템 › 저장소 화면, 작업 관리자 화면</span>"}<input type="file" accept="image/*" hidden/></label>
+        <label class="upload" id="up">${W.photo ? `<img src="${W.photo}" alt="올린 사진"/>사진을 바꾸려면 누르세요` : "누르거나 끌어다 놓아 사진 올리기<br/><span class='small'>" + esc(photoHint[W.symptom] || "증상이 보이는 화면이나 부위") + "</span>"}<input type="file" accept="image/*" hidden/></label>
         <div style="margin-top:30px" class="field"><label>이름 (선택)</label><input type="text" id="dName" value="${esc(W.name)}"/></div>
         <div class="field"><label>진단 결과를 받을 연락처 (선택 · 이메일 또는 휴대폰)</label><input type="text" id="dContact" value="${esc(W.contact)}"/><div class="hint">진단 결과는 이 화면에도 바로 나와요.</div></div>
         <div class="wiz-nav"><button class="btn light" data-back>이전</button><button class="btn solid" data-submit>진단 요청하기</button></div>`;
@@ -205,16 +230,21 @@
     el.innerHTML = prog + body;
 
     $$("[data-sym]", el).forEach((b) => b.addEventListener("click", () => { W.symptom = b.dataset.sym; W.step = 1; drawWiz(); }));
+    $$("[data-mode]", el).forEach((b) => b.addEventListener("click", () => { W.mode = b.dataset.mode; drawWiz(); }));
+    $$("[data-brand]", el).forEach((b) => b.addEventListener("click", () => { if (W.brand !== b.dataset.brand) { W.brand = b.dataset.brand; W.modelId = ""; W.code = ""; } drawWiz(); }));
+    $$("[data-model]", el).forEach((b) => b.addEventListener("click", () => { const mm = S.model(b.dataset.model); W.modelId = mm.id; W.code = mm.codes.length === 1 ? mm.codes[0] : ""; drawWiz(); }));
+    $$("[data-code]", el).forEach((b) => b.addEventListener("click", () => { W.code = b.dataset.code; drawWiz(); }));
     $("[data-back]", el) && $("[data-back]", el).addEventListener("click", () => { W.step--; drawWiz(); });
     $("[data-skip]", el) && $("[data-skip]", el).addEventListener("click", () => { W.modelId = ""; W.code = ""; W.step = 2; drawWiz(); });
     $("[data-next]", el) && $("[data-next]", el).addEventListener("click", () => {
       if (W.step === 2 && !checkValid()) return;
+      if (W.step === 3 && !checkBasic()) return;
       W.step++; drawWiz();
     });
-    bindSearch("wizSearch", (mm, code) => { W.modelId = mm.id; W.code = code; drawWiz(); });
-    // self-check controls
+    bindSearch("wizSearch", (mm, code) => { W.modelId = mm.id; W.brand = mm.brand; W.code = code; drawWiz(); });
     $$("[data-set]", el).forEach((b) => b.addEventListener("click", () => {
-      const [k, v] = b.dataset.set.split(":"); W[k] = v === "true" ? true : v === "false" ? false : v; drawWiz();
+      const i = b.dataset.set.indexOf(":"); const k = b.dataset.set.slice(0, i), v = b.dataset.set.slice(i + 1);
+      W[k] = v === "true" ? true : v === "false" ? false : v; drawWiz();
     }));
     $$("[data-num]", el).forEach((i) => i.addEventListener("input", () => { W[i.dataset.num] = i.value; }));
     const up = $("#up", el);
@@ -227,47 +257,64 @@
     }
     $("[data-submit]", el) && $("[data-submit]", el).addEventListener("click", submitDiag);
   }
+  const photoHint = {
+    storage: "예: 설정 › 시스템 › 저장소 화면", slow: "예: 작업 관리자 › 성능 탭 화면", power: "예: 충전기를 꽂은 상태의 노트북 옆면(램프)",
+    display: "예: 노트북 화면 상태, 외부 모니터 연결 모습", battery: "예: 노트북 옆에서 찍은 뒷판(들뜸 확인)", damage: "예: 물이 닿거나 충격받은 부위"
+  };
   function opt(k, v, label, desc) {
     const on = String(W[k]) === String(v);
     return `<button class="opt ${on ? "on" : ""}" data-set="${k}:${v}"><span><div class="ot">${label}</div>${desc ? `<div class="od">${desc}</div>` : ""}</span><span class="radio-dot"></span></button>`;
   }
   function selfCheck() {
-    const nav = `<div class="wiz-nav"><button class="btn light" data-back>이전</button><button class="btn solid" data-next>다음</button></div>`;
     const storageInputs = `<div class="howto"><b style="font-weight:500">이렇게 확인해요</b><ol><li>시작 › <b>설정</b> › <b>시스템</b> › <b>저장소</b>를 열어요.</li><li>맨 위 ‘로컬 디스크 (C:)’ 막대 아래 숫자를 봐요. 예: <i>사용 230GB / 256GB</i></li></ol></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
       <div class="field"><label>전체 용량 (GB)</label><input type="number" min="1" inputmode="numeric" data-num="totalGB" value="${esc(W.totalGB)}" placeholder="256"/></div>
       <div class="field"><label>남은 용량 (GB)</label><input type="number" min="0" inputmode="numeric" data-num="freeGB" value="${esc(W.freeGB)}" placeholder="26"/><div class="hint">전체 − 사용</div></div></div>`;
     switch (W.symptom) {
       case "storage":
-        return `<p class="sub">저장공간 화면에 보이는 숫자 두 개만 알려 주세요.</p>${storageInputs}<div class="err" id="err"></div>${nav}`;
+        return `<p class="sub">저장공간 화면의 숫자와 함께, 무엇이 공간을 많이 차지하는지 알려 주세요.</p>${storageInputs}
+          ${q("가장 많이 차지하는 건 무엇인가요?", "hog", [["media", "사진·영상"], ["games", "게임"], ["work", "업무·학업 파일"], ["unk", "잘 모르겠어요"]], 2)}
+          ${q("임시 파일 정리나 앱 삭제를 해 보셨나요?", "cleaned", [[true, "해 봤는데도 부족해요"], [false, "아직 안 해 봤어요"]], 2)}
+          ${q("앞으로 얼마나 더 필요할 것 같나요?", "need", [["500", "500GB 정도"], ["1000", "1TB 정도"], ["2000", "2TB 이상"], ["unk", "추천해 주세요"]], 2)}`;
       case "slow":
         return `<p class="sub">Ctrl + Shift + Esc로 <b>작업 관리자</b>를 열고 ‘성능’ 탭을 1분쯤 지켜봐 주세요.</p>
-          <div class="eyebrow" style="margin:6px 0 10px">디스크 사용률</div><div class="opts">${opt("diskHigh", true, "자주 90% 안팎이에요")}${opt("diskHigh", false, "대체로 낮아요")}</div>
-          <div class="eyebrow" style="margin:26px 0 10px">메모리 사용률</div><div class="opts">${opt("memHigh", true, "자주 90% 안팎이에요")}${opt("memHigh", false, "대체로 낮아요")}</div>
-          <div style="margin-top:30px">${storageInputs}</div><div class="err" id="err"></div>${nav}`;
+          ${q("디스크 사용률", "diskHigh", [[true, "자주 90% 안팎이에요"], [false, "대체로 낮아요"]], 2)}
+          ${q("메모리 사용률", "memHigh", [[true, "자주 90% 안팎이에요"], [false, "대체로 낮아요"]], 2)}
+          ${q("언제 특히 느린가요?", "when", [["boot", "켤 때·부팅"], ["app", "특정 프로그램을 쓸 때"], ["always", "항상"]], 3)}
+          ${q("뜨겁거나 팬 소리가 커졌나요?", "heat", [[true, "네, 전보다 심해요"], [false, "아니요"]], 2)}
+          <div style="margin-top:30px">${storageInputs}</div>`;
       case "power":
         return `<p class="sub">5분 기본 점검을 해 볼게요.</p><div class="howto"><ol><li>다른 콘센트에 어댑터를 꽂고 충전 램프가 켜지는지 봐요.</li><li>전원 버튼을 15초 길게 눌렀다 떼고, 다시 한 번 눌러요.</li></ol></div>
-          <div class="opts">${opt("powerFixed", true, "다시 켜졌어요")}${opt("powerFixed", false, "여전히 안 켜져요")}</div><div class="err" id="err"></div>${nav}`;
+          ${q("충전기를 꽂으면 충전 램프가 켜지나요?", "lamp", [["on", "켜져요"], ["off", "안 켜져요"], ["unk", "램프를 못 찾겠어요"]], 3)}
+          ${q("점검 결과", "powerFixed", [[true, "다시 켜졌어요"], [false, "여전히 안 켜져요"]], 2)}
+          ${q("꺼지기 직전 상황", "before", [["battery", "배터리가 다 닳았어요"], ["update", "업데이트 중이었어요"], ["liquid", "물·충격이 있었어요"], ["none", "평소처럼 쓰다가"]], 2)}`;
       case "display":
         return `<p class="sub">TV나 모니터에 HDMI로 연결하고, 밝기 키를 올려 보세요.</p>
-          <div class="opts">${opt("extDisplay", "ok", "외부 모니터에는 나와요")}${opt("extDisplay", "none", "둘 다 안 나와요")}${opt("extDisplay", "na", "연결할 모니터가 없어요")}</div><div class="err" id="err"></div>${nav}`;
+          ${q("노트북 화면은 어떤가요?", "look", [["black", "완전히 까매요"], ["dim", "아주 어둡게 희미하게 보여요", "손전등을 비추면 보이는 경우"], ["lines", "줄·얼룩·깨짐이 있어요"], ["flicker", "깜빡이거나 각도에 따라 꺼져요"]], 2)}
+          ${q("외부 모니터 연결 결과", "extDisplay", [["ok", "외부 모니터에는 나와요"], ["none", "둘 다 안 나와요"], ["na", "연결할 모니터가 없어요"]], 3)}`;
       case "battery":
-        return `<p class="sub">배터리 상태는 수리점에서 정확히 확인할 수 있어요.</p><div class="notice">배터리가 부풀어 뒷판이 들떠 있다면 충전을 멈추고 사용하지 마세요.</div>${nav}`;
+        return `<p class="sub">배터리 상태는 수리점에서 정확히 확인할 수 있지만, 위험 신호부터 먼저 확인할게요.</p>
+          ${q("뒷판이 들뜨거나 트랙패드가 눌려 올라왔나요?", "swell", [[true, "네, 들뜬 것 같아요", "충전을 멈추고 쓰지 마세요"], [false, "아니요"]], 2)}
+          ${q("완전히 충전하면 얼마나 쓸 수 있나요?", "hours", [["lt2", "2시간 미만"], ["2to4", "2~4시간"], ["gt4", "4시간 이상"]], 3)}`;
       default:
-        return `<div class="notice stop"><b style="font-weight:500">지금 바로 전원을 끄고 충전기를 빼 주세요.</b><br/>물기나 충격이 있었다면 켜 보지 말고 그대로 두는 게 가장 안전해요.</div>${nav}`;
+        return `<div class="notice stop"><b style="font-weight:500">지금 바로 전원을 끄고 충전기를 빼 주세요.</b><br/>물기나 충격이 있었다면 켜 보지 말고 그대로 두는 게 가장 안전해요.</div>
+          ${q("어떤 일이 있었나요?", "what", [["liquid", "물·음료를 쏟았어요"], ["drop", "떨어뜨렸어요"], ["noise", "이상한 소리가 나요"], ["heat", "너무 뜨거워요"]], 2)}
+          ${q("언제 있었나요?", "since", [["today", "오늘"], ["week", "일주일 안"], ["older", "그 전"]], 3)}`;
     }
   }
   function checkValid() {
     const err = $("#err"); const say = (t) => { if (err) err.textContent = t; return false; };
-    const needNums = ["storage", "slow"].includes(W.symptom);
-    if (W.symptom === "slow" && (W.diskHigh === null || W.memHigh === null)) return say("디스크와 메모리 사용률을 골라 주세요.");
-    if (needNums) {
+    const need = { storage: ["hog", "cleaned", "need"], slow: ["diskHigh", "memHigh", "when", "heat"], power: ["lamp", "powerFixed", "before"], display: ["look", "extDisplay"], battery: ["swell", "hours"], damage: ["what", "since"] }[W.symptom] || [];
+    if (need.some((k) => W[k] === null || W[k] === "")) return say("모든 질문에 답해 주세요.");
+    if (["storage", "slow"].includes(W.symptom)) {
       const t = +W.totalGB, f = +W.freeGB;
       if (!t || t <= 0) return say("전체 용량을 숫자로 입력해 주세요.");
       if (W.freeGB === "" || f < 0 || f > t) return say("남은 용량은 0부터 전체 용량 사이로 입력해 주세요.");
     }
-    if (W.symptom === "power" && W.powerFixed === null) return say("점검 결과를 골라 주세요.");
-    if (W.symptom === "display" && !W.extDisplay) return say("점검 결과를 골라 주세요.");
+    return true;
+  }
+  function checkBasic() {
+    if (!W.age || !W.onset || !W.recent) { const err = $("#err"); if (err) err.textContent = "세 가지 모두 골라 주세요."; return false; }
     return true;
   }
   function shrink(file) {
@@ -283,7 +330,8 @@
   function submitDiag() {
     W.name = $("#dName").value.trim(); W.contact = $("#dContact").value.trim();
     const m = S.model(W.modelId);
-    const input = { symptom: W.symptom, totalGB: +W.totalGB || 0, freeGB: +W.freeGB || 0, diskHigh: W.diskHigh, memHigh: W.memHigh, powerFixed: W.powerFixed, extDisplay: W.extDisplay };
+    const input = { symptom: W.symptom, totalGB: +W.totalGB || 0, freeGB: +W.freeGB || 0 };
+    ["hog", "cleaned", "need", "diskHigh", "memHigh", "when", "heat", "powerFixed", "lamp", "before", "extDisplay", "look", "hours", "swell", "what", "since", "age", "onset", "recent"].forEach((k) => { if (W[k] !== null && W[k] !== "") input[k] = W[k]; });
     const result = S.judge(input, m);
     if (result.grade === "A" && !W.photo) result.lowConfidence = true;
     if (result.requestModel && m) S.addRequest(m.name, W.code);
@@ -297,6 +345,16 @@
     slow: ["작업 관리자 › <b>시작 앱</b>에서 필요 없는 항목 ‘사용 안 함’", "브라우저 탭과 확장 프로그램 줄이기", "Windows 업데이트 후 재부팅", "Windows 보안에서 빠른 검사 실행"],
     power: ["같은 증상이 다시 생기면 어댑터와 콘센트를 먼저 바꿔 보기", "전원 버튼 15초 길게 눌러 초기화하기"]
   };
+  const ansLabel = {
+    hog: { media: "사진·영상이 많음", games: "게임이 많음", work: "업무 파일이 많음" }, cleaned: { true: "정리 해 봄", false: "정리 안 해 봄" },
+    when: { boot: "부팅 때 느림", app: "특정 프로그램에서 느림", always: "항상 느림" }, heat: { true: "발열·팬 소음 있음" },
+    lamp: { on: "충전 램프 켜짐", off: "충전 램프 꺼짐" }, look: { black: "화면 완전히 까맘", dim: "화면 아주 어두움", lines: "줄·깨짐", flicker: "깜빡임" },
+    hours: { lt2: "사용 2시간 미만", "2to4": "사용 2~4시간", gt4: "사용 4시간 이상" }, swell: { true: "뒷판 들뜸" },
+    what: { liquid: "액체", drop: "낙하", noise: "소음", heat: "과열" }, since: { today: "오늘", week: "일주일 안", older: "그 전" },
+    age: { new: "1년 미만 사용", mid: "1~3년 사용", old: "3년 이상 사용" }, onset: { sudden: "갑자기 시작", gradual: "점점 심해짐" },
+    recent: { update: "직전 업데이트", install: "직전 프로그램 설치", drop: "직전 충격", liquid: "직전 액체" }
+  };
+  const answerSummary = (inp) => Object.keys(ansLabel).map((k) => inp && inp[k] != null && ansLabel[k][String(inp[k])]).filter(Boolean).join(" · ");
   function DiagnosisCard(r) {
     const d = S.diagnosis(r.parts[1]);
     if (!d) return NotFound();
@@ -324,6 +382,9 @@
               ${d.result.freePct != null ? `<dt>점검 결과</dt><dd>저장공간 ${esc(d.input.freeGB)}GB 남음 / 전체 ${esc(d.input.totalGB)}GB (여유 ${d.result.freePct.toFixed(0)}%)</dd>` : ""}
               <dt>이유</dt><dd>${esc(d.result.why)}</dd>
               <dt>다음 할 일</dt><dd>${esc(d.result.next)}</dd>
+              ${d.result.recTB ? `<dt>추천 용량</dt><dd>${d.result.recTB}TB 키트</dd>` : ""}
+              ${(d.result.notes || []).length ? `<dt>함께 확인할 점</dt><dd><ul class="notes">${d.result.notes.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></dd>` : ""}
+              ${answerSummary(d.input) ? `<dt>답변 요약</dt><dd class="small muted">${esc(answerSummary(d.input))}</dd>` : ""}
             </dl>
             ${d.photo ? `<img src="${d.photo}" alt="올린 사진" style="max-height:180px;border:1px solid var(--line);margin-bottom:24px"/>` : ""}
             ${action}
@@ -536,7 +597,7 @@
       $("#gMain").innerHTML = prog.complete
         ? `<div class="dcard" style="text-align:center"><div class="eyebrow">완료</div><div class="verdict">저장공간이 늘었어요</div><p class="muted">새 드라이브가 생겼다면 성공이에요. 이제 사진과 영상을 새 공간에 옮겨 보세요.</p><div class="frame wide" style="max-width:420px;margin:24px auto">${photo(PH.step.check, 900)}</div><button class="btn" data-reopen>가이드 다시 보기</button></div>`
         : `<div class="progress-txt">${i + 1} / ${steps.length} · ${esc(s.t)}</div><div class="bar"><i style="width:${pct}%"></i></div>
-          <div class="media"><span class="tag">영상 ${i + 1}장 · 약 ${s.min}분 · ${esc(m.name)}</span>${photo(PH.step[s.art], 1400)}</div>
+          <div class="media">${VID[s.art] ? `<span class="tag"><span class="rec"></span>영상 · ${i + 1}단계 · 약 ${s.min}분 · ${esc(m.name)}</span><video src="${VID[s.art]}" poster="https://images.unsplash.com/photo-${PH.step[s.art][0]}?auto=format&fit=crop&w=1400&q=70" autoplay muted loop playsinline controls preload="metadata" aria-label="${esc(s.t)} 영상"></video>` : `<span class="tag">사진 · ${i + 1}단계 · 약 ${s.min}분 · ${esc(m.name)}</span>${photo(PH.step[s.art], 1400)}`}</div>
           <p class="lead" style="font-size:19px">${esc(s.body)}</p>
           <div class="eyebrow" style="margin:26px 0 4px">확인하고 넘어가요</div>
           <ul class="tasks">${s.tasks.map((t, k) => `<li><label class="check"><input type="checkbox" data-task="${k}" ${(prog.done[i] || [])[k] ? "checked" : ""}/><span>${esc(t)}</span></label></li>`).join("")}</ul>
