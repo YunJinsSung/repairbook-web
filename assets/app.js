@@ -1,5 +1,5 @@
 (function () {
-  const S = window.Store, ART = window.RB_ART, SEED = window.RB_SEED, PH = window.RB_PHOTO;
+  const S = window.Store, ART = window.RB_ART, SEED = window.RB_SEED, PH = window.RB_PHOTO, BR = window.RB_BRAND;
   const photo = (p, w = 1200, eager) => `<img class="ph" src="https://images.unsplash.com/photo-${p[0]}?auto=format&fit=crop&w=${w}&q=75" alt="${p[1]}"${eager ? "" : ' loading="lazy"'} />`;
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -119,7 +119,7 @@
             <ol class="numlist">${steps.map((s, i) => `<li><span class="n">0${i + 1}</span><div><div class="t">${s[0]}</div><div class="d">${s[1]}</div></div></li>`).join("")}</ol>
           </div>
         </div>
-        <div class="frame">${photo(PH.box, 900)}</div>
+        <div class="frame kit-frame">${BR.box}</div>
       </div></section>
 
       <section class="sec sand"><div class="wrap">
@@ -625,9 +625,27 @@
     return {
       title: "키트",
       keepScroll: false,
-      html: `<div class="wrap page-head"><div class="eyebrow">모델 전용 저장공간 추가 키트</div><h1>받자마자 시작할 수 있게</h1><p class="muted" style="margin-top:14px;max-width:640px">작은 크라프트 상자 하나에 필요한 것을 모두 담았어요. 모든 인쇄물에는 주문한 모델 코드와 주문번호가 찍혀 나가요.</p></div>
-      <section class="sec tight"><div class="wrap"><div class="frame wide" style="max-height:440px;margin-bottom:60px">${photo(PH.kitBox, 1600)}</div>
-        <ol class="numlist kitlist">${SEED.kit.map((k) => `<li><span class="n">${k.n}</span><div><div class="t">${esc(k.t)}</div><div class="d">${esc(k.d)}</div></div></li>`).join("")}</ol></div></section>
+      html: `<section class="kit-hero"><div class="wrap kit-hero-in">
+        <div class="kit-hero-art">${BR.box}</div>
+        <div class="kit-hero-copy">
+          <div class="eyebrow">REPAIRBOOK STORAGE UPGRADE KIT</div>
+          <h1>받자마자<br/>시작할 수 있게</h1>
+          <p class="muted">차콜 상자 하나에 필요한 것을 모두 담았어요. 상자 라벨과 나사 매트, 안내 카드에는 주문한 모델 코드와 주문번호가 찍혀 나가요.</p>
+          <ul class="kit-facts"><li><b>9</b><span>구성품</span></li><li><b>7</b><span>단계 가이드</span></li><li><b>30</b><span>분 안팎 장착</span></li></ul>
+          <div class="kit-price"><span class="small muted">설치 패키지</span><b>${won(p.pkg)}</b><span class="small muted">부품 포함 1TB ${won(p.pkg + p.ssd1)}</span></div>
+          <div class="hero-cta"><a class="btn solid" href="#/diagnose">증상 진단하고 주문하기</a><a class="btn" href="#/models">내 모델 확인</a></div>
+        </div>
+      </div></section>
+      <section class="sec"><div class="wrap">
+        <div class="sec-head"><div><div class="eyebrow">상자 안에는</div><h2 class="h-lg" style="margin-top:10px">열면 바로 보이는 순서대로</h2></div><span class="small muted">재사용할 수 있는 폼 트레이에 하나씩 자리를 잡았어요</span></div>
+        <div class="kit-open">${BR.open}</div>
+        <ol class="kit-items">${SEED.kit.map((k, i) => `<li><span class="kn">${i + 1}</span><div><div class="t">${esc(k.t)}</div><div class="d">${esc(k.d)}</div></div></li>`).join("")}</ol>
+      </div></section>
+      <section class="sec tight"><div class="wrap kit-design">
+        <div><div class="eyebrow">패키지 디자인</div><h3>차콜 매트 상자</h3><p class="muted">노트북 옆에 두어도 어울리도록 무광 차콜에 로고만 담았어요.</p></div>
+        <div><div class="eyebrow">모델 라벨</div><h3>실버 라벨 한 장</h3><p class="muted">모델 코드·용량·주문번호가 인쇄돼 다른 모델과 섞이지 않아요.</p></div>
+        <div><div class="eyebrow">트레이</div><h3>다시 쓰는 폼 트레이</h3><p class="muted">작업 뒤에는 남은 나사와 공구를 그대로 보관할 수 있어요.</p></div>
+      </div></section>
       <section class="sec sand"><div class="wrap">
         <div class="sec-head"><h2 class="h-lg">가격은 이렇게 정해요</h2><span class="small muted">부품 시세 ${esc(p.date)} 기준 · 결제 시점에 확정</span></div>
         <div class="compare">
