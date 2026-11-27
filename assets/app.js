@@ -8,8 +8,17 @@
   const app = $("#app");
   const sym = (id) => SEED.symptoms.find((x) => x.id === id) || { label: id };
   const fmtDate = (iso) => { const d = new Date(iso); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
-  const gradeText = { A: "저장공간을 추가하면 해결돼요", B: "부품 없이 직접 해결할 수 있어요", C: "수리점에서 확인이 필요해요" };
+  const gradeText = { A: "키트로 해결할 수 있어요", B: "부품 없이 직접 해결할 수 있어요", C: "수리점에서 확인이 필요해요" };
   const gradeName = { A: "A · 키트로 해결", B: "B · 무료 가이드", C: "C · 수리점 연결" };
+  const KITS = window.RB_KITS || {};
+  const kitHref = (kit, m, code) => kit === "ssd-add" ? `#/model/${m.id}${code ? "?code=" + encodeURIComponent(code) : ""}` : `#/buy/${kit}/${m.id}${code ? "?code=" + encodeURIComponent(code) : ""}`;
+  function kitFrom(kit) {
+    const p = S.prices();
+    return { "ssd-add": p.pkg + p.ssd1, "ssd-swap": p.swapPkg + p.ssd1, ram: p.ramPkg + p.ram16, grease: p.grease }[kit];
+  }
+  function kitCards(kits, m, code) {
+    return `<div class="kit-cta">${kits.map((k) => `<a class="kit-cta-card" href="${kitHref(k, m, code)}"><div><div class="eyebrow">${esc(m.name)} 전용</div><div class="kc-name">${esc(KITS[k].name)}</div><div class="small muted">${esc(KITS[k].short)} · ${esc(KITS[k].time)}</div></div><div class="kc-side"><div class="small muted">${k === "grease" ? "" : "부품 포함 "}</div><b>${won(kitFrom(k))}~</b><span class="btn solid sm">키트 보기</span></div></a>`).join("")}</div>`;
+  }
 
   function toast(msg) {
     const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
@@ -33,7 +42,7 @@
   }
   const routes = {
     "": Home, diagnose: Diagnose, diagnosis: DiagnosisCard, models: Models, model: ModelDetail,
-    order: Order, done: Done, guide: Guide, orders: Orders, admin: Admin, kit: Kit, upgrade: Upgrade
+    order: Order, buy: Buy, done: Done, guide: Guide, orders: Orders, admin: Admin, kit: Kit, upgrade: Upgrade
   };
   function render() {
     const r = parse();
@@ -372,12 +381,12 @@
         const big = U.goal === "2000" || +U.curGB >= 1000;
         if (info.ssd === "add") {
           const rec = Math.min(big ? 2 : 1, m.maxTB || 1);
-          out.push({ id, v: "ok", label: "추가 가능", why: `빈 M.2 슬롯이 ${m.emptySlots}개 있어요. 지금 SSD는 그대로 두고 하나 더 꽂아요(${m.ssdSpec}).`,
-            next: `추천: ${rec}TB 추가 키트${(big && rec < 2) ? ` — 이 모델은 ${m.maxTB}TB까지만 판매해요` : ""}.`, cta: `<a class="btn solid sm" href="#/model/${m.id}${U.code ? "?code=" + encodeURIComponent(U.code) : ""}">키트 보기</a>` });
+          out.push({ id, v: "ok", kit: "ssd-add", label: "추가 가능", why: `빈 M.2 슬롯이 ${m.emptySlots}개 있어요. 지금 SSD는 그대로 두고 하나 더 꽂아요(${m.ssdSpec}).`,
+            next: `추천: ${rec}TB 추가 키트${(big && rec < 2) ? ` — 이 모델은 ${m.maxTB}TB까지만 판매해요` : ""}.` });
         } else {
           const rec = big ? 2 : 1;
-          out.push({ id, v: "replace", label: "교체로 가능", why: `SSD 슬롯이 1개뿐이라 추가는 안 돼요. 지금 SSD를 더 큰 것으로 바꾸고, 기존 데이터는 그대로 복제해서 옮겨요(${m.ssdSpec}).`,
-            next: `추천: ${rec}TB로 교체 · 데이터 복제 안내 포함. 교체 키트는 상담 후 보내 드려요.` });
+          out.push({ id, v: "replace", kit: "ssd-swap", label: "교체로 가능", why: `SSD 슬롯이 1개뿐이라 추가는 안 돼요. 지금 SSD를 더 큰 것으로 바꾸고, 기존 데이터는 그대로 복제해서 옮겨요(${m.ssdSpec}).`,
+            next: `추천: ${rec}TB로 교체 · USB-C 복제 어댑터와 데이터 복제 안내가 키트에 들어 있어요.` });
         }
       }
       if (id === "ram") {
@@ -386,15 +395,15 @@
           next: "대신 시작 프로그램 줄이기·브라우저 탭 정리로 메모리 여유를 만들 수 있어요. 저장공간 여유가 15% 미만이면 SSD 업그레이드도 체감 속도에 도움이 돼요." });
         const cur = +U.ramGB || 0;
         const rec = cur <= 8 ? "32GB (16GB × 2개로 교체)" : cur <= 16 ? "32GB (16GB 1개 추가 · 같은 규격으로 맞춤)" : "64GB (32GB × 2개)";
-        out.push({ id, v: "ok", label: "가능", why: info.ramNote, next: `추천: ${rec}. ${U.ramUse === "light" ? "문서·웹 위주라면 지금 용량으로도 충분할 수 있어요." : "작업량에 비해 메모리가 부족한 상태라 효과가 커요."}` });
+        out.push({ id, v: "ok", kit: "ram", label: "가능", why: info.ramNote, next: `추천: ${rec}. ${U.ramUse === "light" ? "문서·웹 위주라면 지금 용량으로도 충분할 수 있어요." : "작업량에 비해 메모리가 부족한 상태라 효과가 커요."}` });
       }
       if (id === "grease") {
         if (!info.grease) return out.push(pend(id));
         const need = U.age === "old" || U.heat === "yes" || U.throttle === "yes";
         const hard = info.grease >= 5;
         if (!need) out.push({ id, v: "later", label: "아직 불필요", why: "사용 기간이 짧고 발열·성능 저하 신호가 없어요. 지금 바르면 보증만 손해예요.", next: "보통 2~3년 뒤, 팬 소음이 커지거나 뜨거워지면 다시 진단해 주세요." });
-        else out.push({ id, v: "ok", label: hard ? "가능 · 수리점 권장" : "가능", why: `${U.heat === "yes" ? "발열·팬 소음이 커졌고, " : ""}${U.age === "old" ? "2년 넘게 쓰셔서 " : ""}구리스가 굳었을 가능성이 커요. 난이도 ${"●".repeat(info.grease)}${"○".repeat(5 - info.grease)}`,
-          next: `${info.greaseNote} ${hard ? "제휴 수리점 작업으로 연결해 드려요." : "구리스·알코올 패드·헤라가 든 재도포 키트와 영상 가이드로 진행해요."}` });
+        else out.push({ id, v: "ok", kit: "grease", label: hard ? "가능 · 대신 장착 권장" : "가능", why: `${U.heat === "yes" ? "발열·팬 소음이 커졌고, " : ""}${U.age === "old" ? "2년 넘게 쓰셔서 " : ""}구리스가 굳었을 가능성이 커요. 난이도 ${"●".repeat(info.grease)}${"○".repeat(5 - info.grease)}`,
+          next: `${info.greaseNote} ${hard ? "키트를 사면서 ‘대신 장착’을 고르면 제휴 수리점에서 작업해 드려요." : "재도포 키트와 영상 가이드로 직접 할 수 있어요."}` });
       }
     });
     return { out, src: info ? info.src : "" };
@@ -431,14 +440,18 @@
     } else {
       const res = upJudge(m);
       const tname = (id) => UPS.find((u) => u.id === id).t;
+      const kits = res.out.filter((x) => x.kit).map((x) => x.kit);
+      const sig = m.id + "|" + U.code + "|" + JSON.stringify(res.out.map((x) => x.id + x.v));
+      if (U.sig !== sig) { U.sig = sig; U.rec = S.addUpgrade({ modelId: m.id, code: U.code, wants: U.wants.slice(), kits, results: res.out.map((x) => ({ id: x.id, v: x.v, label: x.label })) }); }
       const pill = { ok: "ok", replace: "ok", no: "no", pending: "pending", later: "pending" };
       body = `<h2>${esc(m.name)} 업그레이드 진단 결과</h2><p class="sub">${esc(U.code || m.codes.join(" · "))}</p>
         <div class="up-results">${res.out.map((x) => `<div class="up-res ${x.v}"><div class="up-res-head"><b>${tname(x.id)}</b><span class="pill ${pill[x.v]}">${x.label}</span></div>
-          <p>${esc(x.why)}</p><p class="muted small">${esc(x.next)}</p>${x.cta || ""}</div>`).join("")}</div>
+          <p>${esc(x.why)}</p><p class="muted small">${esc(x.next)}</p>${x.kit ? `<a class="btn solid sm" href="${kitHref(x.kit, m, U.code)}">${esc(KITS[x.kit].name)} 보기 · ${won(kitFrom(x.kit))}~</a>` : ""}</div>`).join("")}</div>
+        ${kits.length ? `<p class="small muted" style="margin-top:12px">업그레이드 진단 ${esc(U.rec.id)} — 이 결과로 바로 키트를 주문할 수 있어요.</p>` : ""}
         ${res.src ? `<p class="small muted" style="margin-top:14px">근거: ${esc(res.src)}</p>` : ""}
         <div class="notice" style="margin-top:22px">직접 분해·업그레이드하면 해당 부위의 제조사 무상 수리가 제한될 수 있어요. 불안하면 제휴 수리점 작업으로 연결해 드려요.</div>
         ${res.out.some((x) => x.v === "ok" || x.v === "replace") ? `<div class="field" style="margin-top:26px"><label>상담받을 연락처 (이메일 또는 휴대폰)</label><input type="text" id="uContact" value="${esc(U.contact)}"/></div>
-        <div class="wiz-nav"><button class="btn light" data-back>답변 고치기</button><button class="btn solid" data-uapply>업그레이드 상담 신청</button></div>` : `<div class="wiz-nav"><button class="btn light" data-back>답변 고치기</button><a class="btn" href="#/diagnose">증상 진단 해 보기</a></div>`}`;
+        <div class="wiz-nav"><button class="btn light" data-back>답변 고치기</button><button class="btn" data-uapply>먼저 상담받고 싶어요</button></div>` : `<div class="wiz-nav"><button class="btn light" data-back>답변 고치기</button><a class="btn" href="#/diagnose">증상 진단 해 보기</a></div>`}`;
     }
     el.innerHTML = prog + body;
     const say = (t) => { const e = $("#err"); if (e) e.textContent = t; };
@@ -490,7 +503,7 @@
     const p = S.prices();
     let action = "";
     if (review) action = `<div class="notice">사람이 사진과 답변을 확인하고 있어요. 영업일 24시간 안에 이 카드가 확정돼요. 확정 전에는 결제할 수 없어요.</div>`;
-    else if (g === "A") action = `<a class="btn solid" href="#/model/${m.id}?code=${encodeURIComponent(d.code)}">이 노트북에 맞는 키트 보기</a>`;
+    else if (g === "A") action = `<div class="eyebrow" style="margin:6px 0 12px">이 진단에 맞는 키트</div>${kitCards(S.kitsOf(d), m, d.code)}`;
     else if (g === "B") action = `<div class="eyebrow" style="margin:6px 0 12px">무료 해결 가이드</div><ol class="numlist">${guide.map((t, i) => `<li><span class="n">0${i + 1}</span><div class="t" style="letter-spacing:0;font-weight:300">${t}</div></li>`).join("")}</ol>`;
     else action = `<div class="notice ${d.result.urgent ? "stop" : ""}">지금은 부품을 사지 않으셔도 돼요. 이 카드를 제휴 수리점에 보여 주시면 점검비가 면제·할인되고, 같은 점검을 다시 받지 않아도 돼요.</div>
       <button class="btn solid" data-repair>제휴 수리점 연결 요청</button>`;
@@ -568,7 +581,7 @@
           : `<div class="notice small">잘못 사는 일이 없도록, 주문 전에 1분 진단으로 키트가 맞는지 먼저 확인해요.</div><a class="btn solid block" href="#/diagnose?symptom=storage&model=${m.id}&code=${encodeURIComponent(code)}">1분 진단하고 주문하기</a>`}
         <ul class="small muted" style="padding-left:18px;margin:20px 0 0"><li>약 ${m.minutes}분 · 준비물 없음(키트에 다 들어 있어요)</li><li>맞지 않으면 무료 교환·전액 환불</li><li>부담되면 장착 대행 선택 가능</li></ul></div>`;
     } else if (v === "no") {
-      box = `<div class="buybox"><div class="eyebrow">다음에 할 수 있는 일</div><p style="margin-top:12px">${esc(m.note)}</p><a class="btn block" href="#/diagnose?model=${m.id}&code=${encodeURIComponent(code)}">증상 진단 받아 보기</a></div>`;
+      box = `<div class="buybox"><div class="eyebrow">다음에 할 수 있는 일</div><p style="margin-top:12px">${esc(m.note)}</p><a class="btn block" href="#/diagnose?model=${m.id}&code=${encodeURIComponent(code)}">증상 진단 받아 보기</a>${["ssd-swap", "ram", "grease"].some((k) => S.canKit(k, m)) ? `<div class="small muted" style="margin:18px 0 8px">이 모델에서 할 수 있는 업그레이드: ${["ssd-swap", "ram", "grease"].filter((k) => S.canKit(k, m)).map((k) => esc(KITS[k].name)).join(", ")}</div><a class="btn solid block" href="#/upgrade">업그레이드 진단하기</a>` : ""}</div>`;
     } else {
       box = `<div class="buybox"><div class="eyebrow">준비 중</div><p style="margin-top:12px">${esc(m.note || "실물 검수 후 판매를 시작해요.")}</p><button class="btn solid block" data-notify>준비되면 알림 받기</button></div>`;
     }
@@ -627,7 +640,7 @@
           <label class="check"><input type="checkbox" id="oCare"/><span><b style="font-weight:500">케어 플랜 (1년)</b> +${won(p.care)}<br/><span class="small muted">연 2회 원격 점검, 클리닝·백업 알림, 우선 지원</span></span></label>
 
           <div class="eyebrow" style="margin:46px 0 14px">02 · 모델 코드 다시 확인</div>
-          <div class="notice small">진단 때 확인한 코드: <b style="font-weight:500">${esc(code)}</b> — 미호환 발송을 막기 위해 한 번 더 입력해 주세요.</div>
+          <div class="notice small">${code ? `진단 때 확인한 코드: <b style="font-weight:500">${esc(code)}</b> — 미호환 발송을 막기 위해 한 번 더 입력해 주세요.` : "모델 이름으로 진단하셨어요. 노트북 바닥 스티커나 ‘시스템 정보’의 모델 코드를 입력해 주세요."}</div>
           <div class="field"><label>모델 코드</label><input type="text" id="oCode" autocomplete="off" placeholder="${esc(code)}"/><div class="err" id="eCode"></div></div>
 
           <div class="eyebrow" style="margin:40px 0 4px">03 · 확인하고 동의하기</div>
@@ -671,13 +684,100 @@
           let ok = true;
           const typed = $("#oCode").value;
           $("#eCode").textContent = ""; $("#eAgree").textContent = ""; $("#eShip").textContent = "";
-          if (S.norm(typed) !== S.norm(code)) { $("#eCode").textContent = "진단 때 확인한 코드와 달라요. 노트북의 ‘시스템 모델’ 값을 다시 확인해 주세요."; ok = false; }
+          if (code ? S.norm(typed) !== S.norm(code) : (S.resolve(typed) || {}).id !== m.id) { $("#eCode").textContent = "진단 때 확인한 코드와 달라요. 노트북의 ‘시스템 모델’ 값을 다시 확인해 주세요."; ok = false; }
           if ($$(".agree").some((c) => !c.checked)) { $("#eAgree").textContent = "세 가지 모두 확인해 주세요."; ok = false; }
           const name = $("#oName").value.trim(), phone = $("#oPhone").value.trim(), addr = $("#oAddr").value.trim();
           if (!name || !/^[0-9\-\s]{9,14}$/.test(phone) || !addr) { $("#eShip").textContent = "이름, 휴대폰 번호, 주소를 확인해 주세요."; ok = false; }
           if (!ok) { toast("입력하지 않은 항목이 있어요."); return; }
           const s = sum();
           const o = S.addOrder({ modelId: m.id, code, kind: O.kind, install: O.install, care: O.care, lines: s.rows.map((x) => [x[0].replace(/<[^>]+>/g, ""), x[1]]), total: s.total, diagnosisId: gate.d.id, ship: { name, phone, addr } });
+          location.hash = "#/done/" + o.id;
+        });
+      }
+    };
+  }
+
+  // ---------- Buy (SSD 교체 · RAM · 구리스 키트) ----------
+  function Buy(r) {
+    const kit = r.parts[1], m = S.model(r.parts[2]), K = KITS[kit];
+    if (!m || !K || kit === "ssd-add") return NotFound();
+    const gate = S.kitGate(kit, m.id);
+    if (!gate.ok) {
+      const why = gate.reason === "model" ? `${esc(m.name)}은(는) ${esc(K.name)}를 쓸 수 없는 모델이에요.` : gate.reason === "review" ? "진단 카드를 사람이 확인 중이에요. 확정되면 주문할 수 있어요." : "내 노트북에 맞는지 먼저 확인해야 결제할 수 있어요. 잘못 사는 일을 막기 위한 장치예요.";
+      const want = { "ssd-swap": "ssd", ram: "ram", grease: "grease" }[kit];
+      return { title: "주문", html: `<div class="wrap page-head"><div class="eyebrow">${esc(K.name)}</div><h1>주문 전에 진단이 필요해요</h1><p class="muted" style="margin-top:14px;max-width:620px">${why}</p>
+        <p style="margin-top:26px;display:flex;gap:10px;flex-wrap:wrap"><a class="btn solid" href="#/upgrade?want=${want}">업그레이드 진단하기</a><a class="btn" href="#/diagnose">증상 진단하기</a></p></div>` };
+    }
+    const code = r.q.get("code") || gate.d.code || "";
+    const p = S.prices(), st = S.s.settings, up = S.up(m) || {};
+    const opts = S.kitOptions(kit, m);
+    const O = { kind: opts[0][0], install: kit === "grease" && up.grease >= 5, care: false };
+    const warn = kit === "ssd-swap" ? "기존 SSD를 빼는 작업이에요. 복제가 끝나기 전에는 기존 SSD를 지우거나 버리지 마세요." : kit === "ram" ? "기존 모듈과 같은 규격(DDR5 SO-DIMM)만 넣어요. 키트는 모델 규격에 맞춰 보내 드려요." : "구리스는 쌀알 크기만큼만 발라요. 너무 많이 바르면 오히려 열이 잘 빠지지 않아요.";
+    return {
+      title: K.name + " 주문",
+      html: `<div class="wrap page-head"><a class="tlink small" href="#/upgrade">← 업그레이드 진단</a><div class="eyebrow" style="margin-top:20px">${esc(m.name)} 전용</div><h1 style="margin-top:8px">${esc(K.name)}</h1><p class="muted" style="margin-top:10px">${esc(K.short)} · ${esc(K.time)} · 진단 ${esc(gate.d.id)} 확인 완료</p></div>
+      <div class="wrap" style="padding-bottom:110px"><form class="detail" id="buyForm" novalidate>
+        <div>
+          <div class="eyebrow" style="margin-bottom:14px">01 · 구성 고르기</div>
+          <div class="opts">${opts.map((o) => `<button type="button" class="opt" data-kind="${o[0]}"><span><div class="ot">${o[1]}</div><div class="od">${o[2]}</div></span><span class="op">${won(o[3].reduce((a, b) => a + b[1], 0))}</span></button>`).join("")}</div>
+          <div class="kit-inbox"><div class="qt">상자 안에는</div><ol>${K.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ol></div>
+          <div class="notice small" style="margin-top:14px">${esc(warn)}</div>
+          <div class="eyebrow" style="margin:34px 0 4px">추가 선택</div>
+          <label class="check"><input type="checkbox" id="oInstall" ${O.install ? "checked" : ""}/><span><b style="font-weight:500">대신 장착해 주세요</b> +${won(p.install)}<br/><span class="small muted">${kit === "grease" && up.grease >= 5 ? "이 모델은 난이도가 높아 대신 장착을 권해요." : "제휴 수리점에서 작업해 드려요."}</span></span></label>
+          <label class="check"><input type="checkbox" id="oCare"/><span><b style="font-weight:500">케어 플랜 (1년)</b> +${won(p.care)}<br/><span class="small muted">연 2회 원격 점검, 클리닝·백업 알림, 우선 지원</span></span></label>
+
+          <div class="eyebrow" style="margin:46px 0 14px">02 · 모델 코드 다시 확인</div>
+          <div class="notice small">${code ? `진단 때 확인한 코드: <b style="font-weight:500">${esc(code)}</b> — 미호환 발송을 막기 위해 한 번 더 입력해 주세요.` : "모델 이름으로 진단하셨어요. 노트북 바닥 스티커나 ‘시스템 정보’의 모델 코드를 입력해 주세요."}</div>
+          <div class="field"><label>모델 코드</label><input type="text" id="oCode" autocomplete="off" placeholder="${esc(code || m.codes[0])}"/><div class="err" id="eCode"></div></div>
+
+          <div class="eyebrow" style="margin:40px 0 4px">03 · 확인하고 동의하기</div>
+          <label class="check"><input type="checkbox" class="agree"/><span>보증 영향을 확인했어요. <span class="small muted">${esc(m.warranty || "직접 분해하면 해당 부위의 무상 수리가 제한될 수 있어요.")}</span></span></label>
+          <label class="check"><input type="checkbox" class="agree"/><span>작업 전에 내 파일을 백업해요. 데이터 복구는 지원 범위 밖이에요.</span></label>
+          <label class="check"><input type="checkbox" class="agree"/><span>가이드 미준수로 인한 파손 면책 기준과 오진 안심 보장 내용을 확인했어요. <a class="tlink small" href="#/kit#guarantee" target="_blank">보기</a></span></label>
+          <div class="err" id="eAgree"></div>
+
+          <div class="eyebrow" style="margin:40px 0 14px">04 · 받는 분</div>
+          <div class="field"><label>이름</label><input type="text" id="oName" autocomplete="name"/></div>
+          <div class="field"><label>휴대폰</label><input type="tel" id="oPhone" autocomplete="tel" placeholder="010-0000-0000"/></div>
+          <div class="field"><label>주소</label><input type="text" id="oAddr" autocomplete="street-address"/></div>
+          <div class="err" id="eShip"></div>
+        </div>
+        <aside class="sticky"><div class="buybox">
+          <div class="eyebrow">주문 요약</div>
+          <div class="serif" style="font-size:18px;margin:10px 0 4px">${esc(K.name)}</div>
+          <div class="small muted" style="margin-bottom:16px">${esc(m.name)} ${esc(code)}</div>
+          <div id="sum"></div>
+          <button class="btn solid block" style="margin-top:22px">${st.preorder ? "사전예약 결제하기" : "결제하기"}</button>
+          <p class="small muted" style="margin-top:12px">데모 화면이에요. 실제 결제는 일어나지 않아요. 부품 가격은 결제 시점 시세로 확정돼요.</p>
+        </div></aside>
+      </form></div>`,
+      bind() {
+        const sum = () => {
+          const o = opts.find((x) => x[0] === O.kind);
+          const rows = o[3].slice();
+          if (O.install) rows.push(["장착 대행", p.install]);
+          if (O.care) rows.push(["케어 플랜 1년", p.care]);
+          const total = rows.reduce((a, b) => a + b[1], 0);
+          $("#sum").innerHTML = rows.map((x) => `<div class="sum-row"><span>${esc(x[0])}</span><span>${won(x[1])}</span></div>`).join("") + `<div class="sum-row total"><span>합계</span><span>${won(total)}</span></div>`;
+          $$("[data-kind]").forEach((b) => b.classList.toggle("on", b.dataset.kind === O.kind));
+          return { rows, total, label: o[1] };
+        };
+        $$("[data-kind]").forEach((b) => b.addEventListener("click", () => { O.kind = b.dataset.kind; sum(); }));
+        $("#oInstall").addEventListener("change", (e) => { O.install = e.target.checked; sum(); });
+        $("#oCare").addEventListener("change", (e) => { O.care = e.target.checked; sum(); });
+        sum();
+        $("#buyForm").addEventListener("submit", (e) => {
+          e.preventDefault();
+          let ok = true;
+          const typed = $("#oCode").value;
+          $("#eCode").textContent = ""; $("#eAgree").textContent = ""; $("#eShip").textContent = "";
+          if (code ? S.norm(typed) !== S.norm(code) : (S.resolve(typed) || {}).id !== m.id) { $("#eCode").textContent = "이 모델의 코드와 달라요. 노트북의 ‘시스템 모델’ 값을 다시 확인해 주세요."; ok = false; }
+          if ($$(".agree").some((c) => !c.checked)) { $("#eAgree").textContent = "세 가지 모두 확인해 주세요."; ok = false; }
+          const name = $("#oName").value.trim(), phone = $("#oPhone").value.trim(), addr = $("#oAddr").value.trim();
+          if (!name || !/^[0-9\-\s]{9,14}$/.test(phone) || !addr) { $("#eShip").textContent = "이름, 휴대폰 번호, 주소를 확인해 주세요."; ok = false; }
+          if (!ok) { toast("입력하지 않은 항목이 있어요."); return; }
+          const sm = sum();
+          const o = S.addOrder({ modelId: m.id, code: code || typed.trim().toUpperCase(), kit, kitName: `${K.name} · ${sm.label}`, kind: O.kind, install: O.install, care: O.care, lines: sm.rows, total: sm.total, diagnosisId: gate.d.id, ship: { name, phone, addr } });
           location.hash = "#/done/" + o.id;
         });
       }
@@ -694,7 +794,7 @@
       <div class="wrap" style="padding-bottom:110px"><div class="two">
         <div>
           <div class="spec"><div>주문번호</div><div class="serif">${esc(o.id)}</div><div>모델</div><div>${esc(m ? m.name : "")} <span class="small muted">${esc(o.code)}</span></div><div>결제 금액</div><div>${won(o.total)}</div><div>출고 예정</div><div>결제 후 2~3영업일</div></div>
-          <div class="eyebrow" style="margin:46px 0 14px">기다리는 동안</div>
+          ${o.kit && o.kit !== "ssd-add" ? `<div class="notice" style="margin-top:30px">${esc((KITS[o.kit] || {}).name || "")} 전용 영상 가이드는 출고와 함께 문자로 보내 드려요. 아래 저장공간 가이드는 분해·조립 순서가 같아 미리 봐 두면 도움이 돼요.</div>` : ""}<div class="eyebrow" style="margin:46px 0 14px">기다리는 동안</div>
           <ol class="numlist"><li><span class="n">01</span><div><div class="t">내 파일 미리 복사해 두기</div><div class="d">작업 1단계에서 다시 확인해요</div></div></li><li><span class="n">02</span><div><div class="t">휴대폰에서 가이드 열어 두기</div><div class="d">작업 중에는 노트북 화면을 볼 수 없어서 휴대폰으로 봐요</div></div></li><li><span class="n">03</span><div><div class="t">5분 미리보기</div><div class="d">전체 과정을 먼저 훑어보면 훨씬 수월해요</div></div></li></ol>
         </div>
         <div class="buybox"><div class="eyebrow">휴대폰으로 이어 보기</div><p class="small muted" style="margin:10px 0 14px">앱 출시 전까지는 아래 주소를 휴대폰에서 열면 같은 가이드가 열려요. 키트의 QR 카드도 같은 곳으로 연결돼요.</p>
@@ -787,7 +887,7 @@
       <div class="wrap" style="padding-bottom:110px">
         ${os.length ? os.map((o) => { const m = S.model(o.modelId); const sup = S.s.support.filter((x) => x.orderId === o.id); return `
           <div style="border-top:1px solid var(--ink);padding:28px 0 40px">
-            <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap"><div><div class="eyebrow">${esc(o.id)} · ${fmtDate(o.createdAt)}</div><div class="serif" style="font-size:21px;margin-top:6px">${esc(m ? m.name : "")} · ${o.kind === "pkg" ? "설치 패키지" : o.kind === "ssd2" ? "부품 포함 2TB" : "부품 포함 1TB"}</div></div><div class="serif" style="font-size:19px">${won(o.total)}</div></div>
+            <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap"><div><div class="eyebrow">${esc(o.id)} · ${fmtDate(o.createdAt)}</div><div class="serif" style="font-size:21px;margin-top:6px">${esc(m ? m.name : "")} · ${o.kitName ? esc(o.kitName) : o.kind === "pkg" ? "설치 패키지" : o.kind === "ssd2" ? "부품 포함 2TB" : "부품 포함 1TB"}</div></div><div class="serif" style="font-size:19px">${won(o.total)}</div></div>
             <ol class="tl">${S.ORDER_STEPS.map((t, i) => `<li class="${i <= o.status ? "on" : ""}">${t}</li>`).join("")}</ol>
             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px"><a class="btn sm solid" href="#/guide/${o.modelId}?order=${o.id}">작업 가이드</a><button class="btn sm" data-help="${o.id}" data-model="${o.modelId}">원격 지원</button>${o.diagnosisId ? `<a class="btn sm" href="#/diagnosis/${o.diagnosisId}">진단 카드</a>` : ""}</div>
             ${sup.length ? `<div class="small muted" style="margin-top:16px">원격 지원 ${sup.length}건 · 최근: ${esc(sup[0].msg || "(내용 없음)")} (${fmtDate(sup[0].at)})</div>` : ""}
@@ -823,6 +923,11 @@
           <div class="kit-price"><span class="small muted">설치 패키지</span><b>${won(p.pkg)}</b><span class="small muted">부품 포함 1TB ${won(p.pkg + p.ssd1)}</span></div>
           <div class="hero-cta"><a class="btn solid" href="#/diagnose">증상 진단하고 주문하기</a><a class="btn" href="#/models">내 모델 확인</a></div>
         </div>
+      </div></section>
+      <section class="sec"><div class="wrap">
+        <div class="sec-head"><div><div class="eyebrow">키트 라인업</div><h2 class="h-lg" style="margin-top:10px">진단 결과에 맞는 키트만 보내요</h2></div><a class="tlink" href="#/upgrade">업그레이드 진단하기</a></div>
+        <div class="lineup">${Object.keys(KITS).map((k) => `<div class="lineup-card"><div class="eyebrow">${k === "ssd-add" || k === "ssd-swap" ? "저장공간" : k === "ram" ? "메모리" : "발열"}</div><h3>${esc(KITS[k].name)}</h3><p class="muted small">${esc(KITS[k].short)} · ${esc(KITS[k].time)}</p><div class="lp">${won(kitFrom(k))}<span class="small muted">부터</span></div><a class="tlink small" href="${k === "ssd-add" ? "#/diagnose?symptom=storage" : "#/upgrade?want=" + ({ "ssd-swap": "ssd", ram: "ram", grease: "grease" }[k])}">${k === "ssd-add" ? "증상 진단으로 시작" : "업그레이드 진단으로 시작"}</a></div>`).join("")}</div>
+        <p class="small muted" style="margin-top:16px">모든 키트는 진단으로 내 모델에 맞는지 확인된 뒤에만 결제할 수 있어요. 아래는 SSD 추가 키트 구성이에요.</p>
       </div></section>
       <section class="sec"><div class="wrap">
         <div class="sec-head"><div><div class="eyebrow">상자 안에는</div><h2 class="h-lg" style="margin-top:10px">열면 바로 보이는 순서대로</h2></div><span class="small muted">재사용할 수 있는 폼 트레이에 하나씩 자리를 잡았어요</span></div>

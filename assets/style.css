@@ -382,3 +382,21 @@ ul.notes li + li { margin-top: 4px; }
 .up-res p { margin: 0 0 6px; font-size: 14.5px; }
 .up-res .btn { margin-top: 8px; }
 @media (max-width: 760px) { .up-grid { grid-template-columns: 1fr; } }
+
+/* Kit purchase CTA */
+.kit-cta { display: grid; gap: 10px; }
+.kit-cta-card { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 18px 20px; border: 1px solid var(--charcoal); background: #fff; transition: background .15s; }
+.kit-cta-card:hover { background: var(--paper-2); }
+.kc-name { font-size: 17px; font-weight: 500; margin: 4px 0 2px; }
+.kc-side { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+.kc-side b { font-family: var(--display); font-weight: 500; font-size: 18px; }
+.kit-inbox { margin-top: 18px; background: var(--paper-2); padding: 18px 22px; }
+.kit-inbox ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 28px; font-size: 13.5px; color: var(--ink-2); }
+.kit-inbox li { break-inside: avoid; padding: 2px 0; }
+.lineup { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.lineup-card { border: 1px solid var(--line); padding: 22px 20px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+.lineup-card h3 { font-size: 18px; margin: 4px 0 0; }
+.lineup-card .lp { font-family: var(--display); font-size: 22px; font-weight: 500; color: var(--charcoal); margin-top: auto; padding-top: 10px; }
+.lineup-card .lp span { margin-left: 6px; font-family: var(--sans); }
+@media (max-width: 900px) { .lineup { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .lineup { grid-template-columns: 1fr; } .kit-cta-card { flex-direction: column; align-items: flex-start; } .kc-side { align-items: flex-start; text-align: left; } .kit-inbox ol { columns: 1; } }

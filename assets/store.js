@@ -7,7 +7,7 @@
 
   function fresh() {
     const s = clone(window.RB_SEED);
-    return { version: s.version, settings: s.settings, models: s.models, diagnoses: [], orders: [], requests: [], interests: [], support: [], progress: {} };
+    return { version: s.version, settings: s.settings, models: s.models, diagnoses: [], upgrades: [], orders: [], requests: [], interests: [], support: [], progress: {} };
   }
   function load() {
     if (mem) return mem;
@@ -71,7 +71,7 @@
     },
 
     prices() {
-      const st = load().settings;
+      const st = Object.assign({}, window.RB_SEED.settings, load().settings);
       const sale = (c) => Math.round((c * (1 + st.ssdMarginPct / 100)) / 100) * 100;
       return {
         pkg: st.packagePrice,
@@ -80,8 +80,57 @@
         install: st.installService,
         care: st.carePlan,
         remote: st.remoteDiag,
-        date: st.priceDate
+        date: st.priceDate,
+        swapPkg: st.swapPackage,
+        ramPkg: st.ramPackage,
+        ram16: sale(st.ramCost16),
+        grease: st.greaseKit
       };
+    },
+
+    // 키트: 모델이 받을 수 있는지
+    up(model) { return model && (window.RB_UPGRADE || {})[model.id]; },
+    canKit(kit, model) {
+      const u = this.up(model); if (!model) return false;
+      if (kit === "ssd-add") return this.verdict(model) === "ok";
+      if (!u || !model.verified) return false;
+      if (kit === "ssd-swap") return u.ssd === "replace";
+      if (kit === "ram") return u.ram === true;
+      if (kit === "grease") return u.grease >= 1;
+      return false;
+    },
+    kitOptions(kit, model) {
+      const p = this.prices();
+      if (kit === "ssd-swap") return [
+        ["swap1", "교체용 SSD 1TB", "공구·복제 어댑터·가이드 포함", [["SSD 교체 패키지", p.swapPkg], [`교체용 SSD 1TB (${p.date} 시세)`, p.ssd1]]],
+        ["swap2", "교체용 SSD 2TB", "용량당 가격이 가장 낮아요", [["SSD 교체 패키지", p.swapPkg], [`교체용 SSD 2TB (${p.date} 시세)`, p.ssd2]]]
+      ];
+      if (kit === "ram") return [
+        ["ram16", "16GB 1개 추가", "빈 슬롯 1개에 추가 · 기존 모듈과 같은 규격", [["RAM 설치 패키지", p.ramPkg], ["DDR5 SO-DIMM 16GB", p.ram16]]],
+        ["ram32", "16GB × 2개 (32GB)", "두 슬롯을 같은 모듈로 맞춰 교체", [["RAM 설치 패키지", p.ramPkg], ["DDR5 SO-DIMM 16GB × 2", p.ram16 * 2]]]
+      ];
+      if (kit === "grease") return [["grease", "재도포 키트", "구리스·알코올 패드·도포 도구·공구 포함", [["서멀 구리스 재도포 키트", p.grease]]]];
+      return [];
+    },
+    kitsOf(rec) { return rec.kits || (rec.result && (rec.result.kits || (rec.result.grade === "A" ? ["ssd-add"] : []))) || []; },
+    kitGate(kit, modelId) {
+      const m = this.model(modelId);
+      if (!this.canKit(kit, m)) return { ok: false, reason: "model" };
+      const s = load();
+      const recs = s.diagnoses.filter((x) => x.modelId === modelId && this.kitsOf(x).includes(kit))
+        .concat(s.upgrades.filter((x) => x.modelId === modelId && this.kitsOf(x).includes(kit)));
+      if (!recs.length) return { ok: false, reason: "nodiag" };
+      const ok = recs.find((x) => x.status === "approved");
+      if (!ok) return { ok: false, reason: "review", d: recs[0] };
+      return { ok: true, d: ok };
+    },
+    addUpgrade(u) {
+      const s = load();
+      u.id = "RB-U-" + stamp() + "-" + rid();
+      u.createdAt = new Date().toISOString();
+      u.status = "approved";
+      s.upgrades.unshift(u); save();
+      return u;
     },
 
     // 사업계획서 2-3 판정 규칙
@@ -92,7 +141,11 @@
       const low = free != null && free < 15;
       const notes = [];
       const r = (grade, why, next, extra = {}) => Object.assign({ grade, why, next, freePct: free, notes }, extra);
-      const modelFail = () => v === "no"
+      const up = this.up(model) || {};
+      const swapOk = this.canKit("ssd-swap", model);
+      const modelFail = () => swapOk
+        ? r("A", `${freeTxt} 이 노트북은 빈 자리가 없어서, 지금 SSD를 더 큰 것으로 교체하면 해결돼요. 데이터는 그대로 옮겨요.`, "SSD 교체 키트를 확인하세요.", { kits: ["ssd-swap"], recTB: (input.need === "2000" || input.totalGB >= 1000) ? 2 : 1 })
+        : v === "no"
         ? r("B", `${freeTxt} 다만 이 노트북은 부품을 추가로 꽂을 빈 자리가 없어요.`, "외장 저장장치 사용과 파일 정리 가이드를 보내 드려요. 교체가 필요하면 수리점을 연결해 드려요.")
         : r("B", `${freeTxt} 이 모델은 아직 검수 중이라 키트를 판매하지 않아요.`, "무료 정리 가이드를 먼저 써 보세요. 모델 추가를 요청해 두면 준비되는 대로 알려 드려요.", { requestModel: true });
 
@@ -117,15 +170,24 @@
           const want = input.need === "2000" ? 2 : input.need === "500" ? 1 : (input.need === "1000" ? 1 : (input.totalGB >= 1000 ? 2 : 1));
           const recTB = Math.min(want, model.maxTB || 1);
           if (want > recTB) notes.push(`이 모델은 제조사 테스트 기준 ${model.maxTB}TB까지만 판매해요. 더 필요하면 외장 저장장치를 함께 쓰세요.`);
-          return r("A", `${freeTxt} 이 노트북은 빈 자리에 저장공간 부품을 하나 더 꽂을 수 있어요.`, "이 노트북에 맞는 키트를 확인하세요.", { recTB });
+          return r("A", `${freeTxt} 이 노트북은 빈 자리에 저장공간 부품을 하나 더 꽂을 수 있어요.`, "이 노트북에 맞는 키트를 확인하세요.", { recTB, kits: ["ssd-add"] });
         }
         case "slow":
           if (input.heat) notes.push("발열과 팬 소음이 커졌다면 내부 먼지 청소가 필요할 수 있어요(수리점 권장).");
           if (input.when === "app" && !input.diskHigh) notes.push("특정 프로그램에서만 느리다면 그 프로그램의 권장 사양을 확인해 보세요.");
-          if (input.memHigh && !input.diskHigh) return r("B", "메모리가 부족해서 느린 경우예요. 이 노트북의 메모리는 교체할 수 없게 붙어 있어요(온보드).", "시작 프로그램 줄이기·브라우저 탭 정리 가이드를 보내 드려요.");
-          if (input.diskHigh && low) { if (v !== "ok") return modelFail(); return r("A", `디스크 사용률이 오래 90% 안팎이고, ${freeTxt}`, "저장공간을 추가하면 해결돼요. 맞는 키트를 확인하세요.", { recTB: 1 }); }
+          if (input.memHigh && !input.diskHigh) {
+            if (up.ram === true && model.verified) return r("A", "메모리가 부족해서 느린 경우예요. 이 노트북은 메모리 슬롯이 있어 늘릴 수 있어요.", "RAM 업그레이드 키트를 확인하세요.", { kits: ["ram"] });
+            return r("B", "메모리가 부족해서 느린 경우예요. 이 노트북의 메모리는 교체할 수 없게 붙어 있어요(온보드).", "시작 프로그램 줄이기·브라우저 탭 정리 가이드를 보내 드려요.");
+          }
+          if (input.diskHigh && low) { if (v !== "ok") return modelFail(); return r("A", `디스크 사용률이 오래 90% 안팎이고, ${freeTxt}`, "저장공간을 추가하면 해결돼요. 맞는 키트를 확인하세요.", { recTB: 1, kits: ["ssd-add"] }); }
           if (input.diskHigh) return r("B", `디스크 사용률은 높지만 공간 여유는 있어요. ${freeTxt}`, "업데이트·백그라운드 작업 점검 가이드를 따라 해 보세요.", { lowConfidence: true });
-          if (input.heat) return r("C", "디스크·메모리는 여유가 있는데 발열이 심해요. 냉각 계통(팬·먼지) 문제로 보여요.", "부품을 사지 않으셔도 돼요. 수리점에서 내부 청소를 받아 보세요.");
+          if (input.heat) {
+            if (this.canKit("grease", model)) {
+              if (up.grease >= 5) notes.push("이 모델은 CPU·GPU 두 곳을 발라야 해서 ‘대신 장착’ 선택을 권해요.");
+              return r("A", "디스크·메모리는 여유가 있는데 발열이 심해요. 굳은 서멀 구리스와 먼지가 원인일 가능성이 커요.", "서멀 구리스 재도포 키트로 해결할 수 있어요. 팬 먼지도 함께 청소해요.", { kits: ["grease"] });
+            }
+            return r("C", "디스크·메모리는 여유가 있는데 발열이 심해요. 냉각 계통(팬·먼지) 문제로 보여요.", "부품을 사지 않으셔도 돼요. 수리점에서 내부 청소를 받아 보세요.");
+          }
           return r("B", "디스크와 메모리 모두 여유가 있어요.", "재부팅·업데이트·악성 프로그램 점검 가이드를 따라 해 보세요.");
         case "power":
           if (input.before === "liquid") return r("C", "물·충격 뒤에 꺼졌어요. 다시 켜면 손상이 커질 수 있어요.", "전원을 켜지 말고 수리점 점검을 받아 주세요.", { urgent: true });
@@ -165,14 +227,7 @@
     },
     diagnosis(id) { return load().diagnoses.find((d) => d.id === id); },
     // 결제 게이트: A 판정 + 모델 가능 + 승인된 진단
-    gate(modelId) {
-      const m = this.model(modelId);
-      if (this.verdict(m) !== "ok") return { ok: false, reason: "model" };
-      const d = load().diagnoses.find((x) => x.modelId === modelId && x.result.grade === "A");
-      if (!d) return { ok: false, reason: "nodiag" };
-      if (d.status !== "approved") return { ok: false, reason: "review", d };
-      return { ok: true, d };
-    },
+    gate(modelId) { return this.kitGate("ssd-add", modelId); },
     addOrder(o) {
       const s = load();
       o.id = "RB-" + stamp() + "-" + rid();

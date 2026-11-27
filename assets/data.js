@@ -13,7 +13,11 @@ window.RB_SEED = {
     priceDate: "2026-09",    // 시세 기준월(다나와)
     autoApprove: true,       // 데모: 진단 자동 승인(실제 운영은 사람이 판독)
     kakaoUrl: "",            // 카카오톡 채널 주소
-    preorder: true           // 사전예약 기간(예약금 결제)
+    preorder: true,          // 사전예약 기간(예약금 결제)
+    swapPackage: 49000,      // SSD 교체 패키지(공구 + USB-C 복제 어댑터) — 가안
+    ramPackage: 29000,       // RAM 설치 패키지 — 가안
+    ramCost16: 60000,        // DDR5 SO-DIMM 16GB 매입가(가정)
+    greaseKit: 29000         // 서멀 구리스 재도포 키트 — 가안
   },
   models: [
     { id: "gram-2024", brand: "LG", name: "LG 그램 (2024년형)", codes: ["14Z90S", "15Z90S", "16Z90S", "17Z90S"],
@@ -156,6 +160,18 @@ window.RB_ART = {
     close: `<svg viewBox="0 0 200 120" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="30" y="50" width="140" height="44" rx="3"/><path d="M30 40 L170 40" stroke-dasharray="5 5"/><path d="M100 20 v14 M94 28 l6 6 6-6"/></svg>`,
     check: `<svg viewBox="0 0 200 120" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="36" y="16" width="128" height="80" rx="2"/><path d="M24 104h152"/><rect x="52" y="34" width="44" height="18"/><rect x="104" y="34" width="44" height="18" stroke-dasharray="3 3"/><path d="M116 66 l8 8 14-16"/></svg>`
   }
+};
+
+// 키트 라인업
+window.RB_KITS = {
+  "ssd-add":  { name: "SSD 추가 키트", short: "빈 자리에 SSD를 하나 더", time: "약 30분",
+    items: ["모델 전용 NVMe SSD(부품 포함형)", "정밀 드라이버·비트 3종", "분해 헤라·피크", "정전기 방지 손목 밴드", "모델 전용 자석 나사 매트", "예비 고정 나사 2개", "QR 가이드 카드", "퀵 스타트 가이드", "즉시 중단·지원 카드"] },
+  "ssd-swap": { name: "SSD 교체 키트", short: "더 큰 SSD로 바꾸고 데이터는 그대로", time: "약 60분 (복제 포함)",
+    items: ["교체용 NVMe SSD", "USB-C M.2 복제 어댑터", "정밀 드라이버·비트 3종", "분해 헤라·피크", "정전기 방지 손목 밴드", "모델 전용 자석 나사 매트", "복제 순서 안내 카드", "QR 가이드 카드"] },
+  "ram":      { name: "RAM 업그레이드 키트", short: "빈 슬롯에 메모리 추가·교체", time: "약 20분",
+    items: ["DDR5 SO-DIMM 메모리(모델 규격)", "정밀 드라이버·비트", "분해 헤라·피크", "정전기 방지 손목 밴드", "모델 전용 나사 매트", "QR 가이드 카드"] },
+  "grease":   { name: "서멀 구리스 재도포 키트", short: "굳은 구리스를 닦고 새로", time: "약 45분",
+    items: ["고성능 서멀 구리스 2g", "이소프로필 알코올 패드 10매", "도포 헤라·브러시", "보풀 없는 닦음 천", "정밀 드라이버·비트", "분해 헤라·피크", "정전기 방지 손목 밴드", "모델 전용 나사 매트", "QR 가이드 카드"] }
 };
 
 // 업그레이드 진단 기준 (모델별). ssd: add=빈 슬롯 추가 / replace=교체만 / pending=검수 중
